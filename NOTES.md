@@ -151,8 +151,9 @@ replay is checked by arguments and hit counts; whether a real mop stroke looks t
 unverified until a human plays.
 
 Not shared (known): shards from cracked items (each machine has its own), tool puppets can't be used by the
-other player (rinsing in a friend's bucket), re-dirtying a cleaned stain (raises don't spread), MusicDisc (hub
-record player only), plain Door (menu/hub only). Each player keeps own money, skill points and cassettes in own save.
+other player (rinsing in a friend's bucket), re-dirtying a cleaned stain (raises don't spread; checked later: not
+a gap, see the 2026-10-28 contribution), MusicDisc (hub record player only), plain Door (menu/hub only).
+Each player keeps own money, skill points and cassettes in own save.
 
 ## Owner's manual two-window test of 0.2.0 (2026-10-26, logs in local/manual1)
 
@@ -250,7 +251,24 @@ the two copies' saves were at different missions.
   (TruckExitCTSPhone, CTSTruckEscape, TruckExitCTS) have no player Animator bound; the only human Animators in
   the scene are the 3 bodies (DrugDealerAnimAvatar, Girl02Avatar). So no player model is loaded in a job; it
   would have to come from the hub/intro scenes or Addressables. Unknown which.
-- Shards, using another player's bucket, re-dirtying.
+- Shards, using another player's bucket, re-dirtying (re-dirtying: not a gap, see the 2026-10-28 contribution).
+- Open, from the owner's test on Developers' Hell (2026-11-01; mission 11, scene GameDevOffice, run-pair -Mission 11):
+  - Elevator: one player's ride moves every other player too, even outside it. Not looked into; likely suspect:
+    Actions replays ElevatorDoor.SummonElevator / lift calls (GameDevOffice has 2 ElevatorDoor), and the elevator
+    script may move "the player" (each machine's own) rather than whoever stands in the car.
+  - Heavy furniture lifted by two players at the same moment ends up not lifted on one of them (Furniture: Heavy
+    events, HeavyGrabber; the grab check only refuses a piece someone else is already known to push).
+  - Two trash bags merging make duplicates until they end as one big bag: probably both owners run the merge
+    (GarbageBagConnector.OnCollisionEnter is blocked only on puppets, and a bag can be ours on one machine and the
+    other's bag ours on the other).
+  - Super Stacker arcade machine: using it opens the minigame for all players; the others then vanish, the
+    connection seems lost, the debug panel says "player in another place" though all are in the same level, and the
+    world stops syncing. Probably a replayed interaction (Actions: Interactable.Interact or similar) loads the
+    minigame on every machine, and the minigame changes the active scene, so the scene key differs.
+  - Personal flashlight: not shown to the other players (PlayerPose carries the tool in hand, not the flashlight).
+  - End of a job: the report's score animations play twice, about a second apart. Not looked into; likely the end of
+    the job reaches the report twice on a machine: once from its own leave and once from the other player's
+    (Ev.Leave -> Jobs.OnLeave), or a replayed call that opens the report.
 
 ## Unknown
 
@@ -435,6 +453,141 @@ victims' bodies" only on the host, a restart only on the host.
   sends Ev.Report (global) so every player saves the same id at once; then an IMGUI box takes a comment (Enter
   saves it into every player's file via Ev.ReportNote, F9 again skips; the player is Block()ed while typing).
   world2 checks it end to end (the client's report: same id, png and txt on both, comment in both).
+
+### Players' lamps and UV lamps (contributed, 2026-11-01)
+- Owner's report (Developers' Hell): switching my lamp 1 switches the friend's lamp 1; with 2 UV lamps each (4 on the
+  map), lamps over the limit don't light blood.
+- Lamps: each player's own tools (PortableItem) were in the scene tables (actions:LampController and others). With
+  the same lamps on both machines a replay by index switched the other player's own lamp; with different lamps the
+  table differed and was switched off (scene lamps unshared). Now GameWorld.Collect leaves anything under a
+  PortableItem out of every table, Actions never replays on one, and Dyn's tool state carries the lamp's on/off
+  (isOn, then Switch); switching another player's lamp (LampController/UVLampController.Interact) takes it over.
+- UV lamps light blood through a shader matrix: UVLampController takes a slot when enabled
+  (CleaningSenseController.TryGetSenseIndex into cleanerSenseIndex, -1 when none), Update lights only slots above 0,
+  OnDisable returns only those: 3 slots. The other player's UV lamps are copies here and took slots in the order
+  they appeared, so an own lamp could stay dark. UvSlots (every 0.5 s) gives the slots to own lamps that are on, then
+  the other player's that are on, then own off, then the other's off (ReturnIndex / TryGetSenseIndex). The game can't
+  light a fourth: with 4 UV lamps on, the other player's second lamp is dark on this screen.
+- Also: UVLampController.Interact does nothing unless the lamp stands (DetectObjectOrientation.IsStanding), and
+  Update switches a fallen one off.
+- lamps suite (-Test lamps -Mission 11): each player puts down a lamp and two UV lamps (client first, so the host's
+  copies of them come first); the host's lamp on, the client's off, the client switches the host's off later; all UV
+  lamps on. PASS 10/10 twice. Mutant uv-first (no UvSlots): the host's own lamp is on and dark (slot -1), FAIL.
+- The client's 31 "table differs" warnings while loading the next job were stale fingerprints of the old job
+  compared under the new scene name (BuildTable reset them); GameWorld.Clear now clears them.
+
+### Cleaning products in buckets and power washers (contributed, 2026-11-01)
+- Owner's request: share the products in buckets (and the tools upgraded from them), as the earlier csc-coop
+  prototype did. Only the bucket's water and dirt were shared; products not, and using another player's bucket
+  changed it here only.
+- Dyn tool state now carries the products (LiquidContainer.activeBuffs / PowerWasherStation.activeBuffs as
+  "buffId:effectiveness:threshold;", rebuilt with TryFindBuffBase + BuffInstance.LoadBuffData) and the station's
+  water. Using another player's bucket or station here (CleanTool, TryAddBuff, TryAddWater, AddWater, CleanWater;
+  station TryAddBuff, TryAddWater) takes it over first, so its new state goes out from here. A mop rinsed in a
+  friend's bucket takes its products (CleanTool copies them). PowerWasherStation overrides PickUp: the
+  only-the-owner rule is patched there too.
+- products suite (-Test products -Mission 11): the host pours green into its bucket; the client sees it, rinses its
+  mop there (the mop gets it), empties it, fills it and pours red (a one-star bucket holds one product). PASS 6/6
+  (both end with red, same water and dirt); mutant bucket-look (no take-over on use): the host keeps green, FAIL.
+  toolcarry 7/7, trash 8/8.
+
+### Doors drifting apart, footprints missing on some floors (contributed, 2026-11-01)
+- Owner's report (Developers' Hell): a door open on the host is closed on the client, and the host closing it opens it
+  there; a footprint made on one machine sometimes doesn't appear on the other.
+- Doors (84 ShortcutDoors in GameDevOffice; doorprobe: tools/run-probe.ps1 -Test doorprobe -Mission 11): a click is
+  Interact -> OnOpen -> Toggle, a push TryForceOpen/TryForceClose, a switch ExternalToggle; none calls
+  OpenDoors/CloseDoors. Actions replayed Toggle as a toggle, Doors sent only OpenDoors/CloseDoors: any path not
+  replayed (a switch, a push) left the door inverted, and every later click kept it so. Now Toggle is not replayed;
+  Doors sends the state (isClosed, set at once by every path: field +224) after Toggle, TryForceOpen/Close,
+  ExternalToggle, OpenDoors, CloseDoors, ResetDoors, once per change, and the others apply it with
+  OpenDoors/CloseDoors. doorsync suite (-Test doorsync -Mission 11: the host opens a door by switch and one by
+  click, the client clicks, each clicked door gets two actions): PASS 4/4; mutant door-old (the 0.4.2 rule) FAIL,
+  door 0 open on the host and closed on the client. doors 17/17.
+- Footprints: the floors there are under a root named "WALLS/WINDOWS/FLOORS". GameWorld.FindByIndexedPath split
+  stain target paths at every '/', found no target, and ProjectBlood threw (NullReferenceException) on the other
+  machine: no stain on those floors was shared (footprints, blood, anything). The path is now split where a segment
+  ends in "#<sibling index>". footsteps suite (-Test footsteps -Mission 11: the client steps 12 times with bloody
+  shoes through FootprintSpawner.ProcessStep): 12 of 12 missing on the host before, PASS 5/5 after (same decal,
+  spot and strength). (Sending the decal prefab along was tried and made no difference: the blood type's prefab is
+  the same FootprintDecal.) stains 14/14, world2 20/20.
+
+### Anyone can carry another player's bucket or lamp (contributed, 2026-11-01)
+- Owner's report: players can't move other players' buckets and lamps. Tool puppets refused every grab (Dyn.OnLocalGrab).
+  Also, nothing stopped another player's E on a tool puppet: PortableItem.PickUp (DOTween scale, then
+  PlayerInventory.TryAddItemToInventory) would have put the friend's tool into a second inventory.
+- Now a tool puppet is taken over like a bag (DynTake): the grabber simulates it, the owner's copy follows. Only the
+  player the tool belongs to (its id's player number) may PickUp it; if someone else simulates it then, the owner
+  takes it back first.
+- toolcarry suite (-Test toolcarry -Mission 11): the host takes its bucket out the game's way
+  (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
+  client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
+  rule) FAIL 4/7. trash 8/8.
+
+### Items at rest get physics near the action (contributed, 2026-11-01)
+- Owner's report (Developers' Hell): physics worse than in the earlier csc-coop prototype. Cause: the host owns every
+  resting item, and every other machine kept them kinematic. On the client a thrown item bounced off resting items as
+  off a wall (bump suite with the old rule, mutant kinematic-rest: target moved 0.00 m), and nothing could be knocked
+  over except by a mop or hand hit (those claim the item).
+- First try, all resting items on local physics everywhere (as in the prototype): items started from the owner's pose
+  tipped over by themselves (vases 40 deg, bottles, a ball), 30 claims in seconds, and piles settled apart; putting
+  them back looped (28618 corrections in 30 s); Rigidbody.IsSleeping() said asleep while an item moved 20 cm.
+- Now (GameWorld.Smooth/WakeNearby/LocalPhysics): a remote item the owner has at rest gets physics here only within
+  1.2 m of our player (checked every 0.1 s) or within reach of an item we move (every frame, 0.8 m + 0.3 s of its
+  flight). Knocked away fast (> 0.5 m/s or 3 rad/s, > 3 cm or 6 deg), it is claimed (at most 3 claims a minute) and
+  the others follow; otherwise, once still again, it goes back to the owner's spot, kinematic. Moving is judged by
+  Track's per-frame movement, not IsSleeping.
+- bump suite (tools/run-pair.ps1 -Test bump -Mission 11, Developers' Hell): the client throws an item into a resting
+  item the host owns; it must be knocked away on both, end at the same spot, and all 1158 items must lie at the same
+  spots on both. PASS 7/7 twice (target 0.71 m, 0.17 m); mutant kinematic-rest FAIL. Also world2 20/20, trash 8/8,
+  breakhit 6/6, stains 14/14, items 8/8; bodies 12/13 (the shelf case, as on 0.4.2 here).
+- run-pair -Mission <id> runs any suite in that job (11 = Game Dev, scene GameDevOffice; the bot lists all missions).
+
+### Test runs leave the mouse alone and skip the waits (contributed, 2026-11-01)
+- Quiet bot runs (CSCCOOP_QUIET=1) took the owner's mouse: the game takes focus when its window opens and again when
+  a job loads, and locks the cursor to its window every frame (Controller_Switch, FirstPersonAIO, MoveCamera,
+  InputController set Cursor.lockState). It also locks it while starting and then stalls for seconds loading the menu
+  (no frames): tools/mouse-check.ps1 saw the cursor clipped to one point for 4-8 s with Chrome in front.
+- HandsOff.cs (quiet runs only): cursor freed in CoopRunner.LateUpdate; when the game takes focus with no mouse button
+  down, focus goes back to the window that was in front when tools/run-game.ps1 started (CSCCOOP_FOCUS_BACK); a
+  background thread releases any cursor clip while another window is in front (it runs through the stalls). Rewired
+  already ignores input while unfocused (ignoreInputWhenAppNotInFocus was true), so nothing to do there.
+- Bot runs also skip the new game's intro cinematic (IntroController.Cinematic.Stop(); the game's OnSkipButtonPressed
+  throws with a default Rewired event) and the loading screen's key wait (LoadingScreenController.WaitingForSkip =
+  false), and run-pair passes CSCCOOP_MENU_WAIT=10 (was 25). Job cutscenes were already skipped (IntroSkip).
+- tools/mouse-check.ps1 every second during trash, stains and world2 (259 samples): never clipped, the game in front
+  once for under a second. Results: trash 8/8, stains 14/14, world2 20/20, each about 88 s (stains took 161 s without
+  the shorter menu wait and focus handling).
+- Manual runs (run-manual.ps1, no CSCCOOP_QUIET) keep normal mouse look.
+
+### CCTV recordings and shards picked up by the other player (contributed fix, 2026-10-28)
+- CCTV (Smart House laptop, checked in game): the 10 recordings ("1/05/2023" .. "10/05/2023") exist as soon as
+  the job loads, without the UI. The game makes them with `new CCTVRecord(name)`, a MonoBehaviour without a native
+  object, so Unity's `== null` is true for every one and the `rec != null` filters in Cctv.Tick and the cctv bot
+  skipped them all ("10 null entries"; the managed object and its name are fine). Deleting in the UI goes through
+  HackableComputerPresenter.HandleFileDelete, which removes the record from the model's list itself (no
+  RemoveRecordInFolder call). RemoveRecordInFolder(name) on the other machine works, and an empty folder turns the
+  "Delete CCTV" quest to Success.
+- Fix: Cctv.IsRecord (managed reference, not Unity's ==); a prefix on HandleFileDelete (instance cast checked,
+  for folded bodies); the watch records every name from the job's start and sends deletions made before the other
+  player was connected once live. cctv suite: the client deletes one recording, then all, through
+  HandleFileDelete; checks the host's folder and the quest on both. 7/7; the shipped Cctv.cs on the same suite:
+  host keeps 10 recordings, quest Active (3 of 7 fail).
+- Shards: a shard simulated by one player and picked up by another player's trash can stayed on the first
+  machine: Dyn.OnState returned for its own objects before the "gone" branch. Now "gone, collected" is applied to
+  our own object too. New breakhit suite (tools/run-pair.ps1 -Test breakhit): the client throws an item onto a
+  bottle the host owns (it breaks once, the client simulates the shards, same spots on both), then the host picks
+  up one of the client's shards. 6/6; before the fix the shard stayed on the client.
+- Run with these changes: world2, trash, bodies, stains, items and the core tests (results in the PR).
+- Re-dirtying a cleaned stain is not a gap (probe in the contributor's mod, Dealer's Apartment, 2026-10-29). In the
+  game code, Taint.SetIntensity is called by CleanableDecal.Update (intensity follows the decal texture, and strokes
+  only erase it), the save loaders, the cheat panel, and FootprintSpawner.LeaveFootprint (on the new footprint it just
+  made). Every way of adding blood makes a NEW decal through BloodSpreaderController.ProjectBlood: dirty tool
+  (CleaningItem.CleanOrTaint), footprints, bucket spill (LiquidContainer.TryCreateBloodSpill), drips; Taint.Update
+  only sets the sort order. In game: a mop cleaned a stain 1.000 -> 0.784; the mop set fully dirty and stroked the
+  same spot for 15 s (29 CleanOrTaint calls): no change; blood projected on top: a new decal, the old one unchanged.
+  No rise on any of the 371 stains (SetIntensity hook and a scan every second), two runs. So the min rule matches the
+  game, and the stains replay of ProjectBlood already covers re-dirtying. Not seen: the dirty mop's own blood (none
+  spawned in that setup).
 
 ### Friend test of 0.4.1 -> 0.4.2 (2026-10-27)
 - Villa: host key 85C12853, client 155AA62C, same 535 items: some table differed and the whole job's sync was

@@ -51,7 +51,7 @@ public partial class Bot : MonoBehaviour
 
         // The test saves start in the intro hub, which drives straight into the first job: a manual test starts
         // its job from wherever the player first can move.
-        bool startHere = s.Contains("Hub") || ((test == "manual" || test == "cctv") && !s.Contains("Menu") && !s.Contains("Loading"));
+        bool startHere = s.Contains("Hub") || ((test == "manual" || test == "cctv" || Env.Get("CSCCOOP_TEST_SCENE") != "") && !s.Contains("Menu") && !s.Contains("Loading"));
         if (w?.Player != null && w.Player.CanMove && startHere && !missionStarted && inScene > 5)
         {
             if (!listed) { listed = true; ListMissions(); }
@@ -85,12 +85,15 @@ public partial class Bot : MonoBehaviour
         if (test == "modelprobe" && w != null) { ModelProbe.TickReport(); ModelProbe.Tick(w); return; }
         if (test == "toolprobe" && w != null) { ToolProbe.Tick(w); return; }
         if (test == "shardprobe" && w != null) { ShardProbe(w); return; }
+        if (test == "doorprobe" && w != null) { DoorProbe(s, inScene, w); return; }
 
         if (test == "jobs" && w != null) { JobTest(s, inScene, w); }
         if (test == "laptop" && w != null) { LaptopTest(s, inScene, w); return; }
 
         var ses = CoopRunner.Instance?.Session;
-        if (readyAt < 0 && ses != null && ses.Synced && w.SceneKey != 0)
+        // run-pair -Mission: the test runs in that job (CSCCOOP_TEST_SCENE), not in the first job on the way there.
+        string only = Env.Get("CSCCOOP_TEST_SCENE");
+        if (readyAt < 0 && ses != null && ses.Synced && w.SceneKey != 0 && (only == "" || s == only))
             foreach (var rp in ses.Players.Values)
                 if (rp.SceneKey == w.SceneKey) { readyAt = Time.unscaledTime; Plugin.L.LogInfo("BOT ready: both players in the same job"); break; }
         if (readyAt < 0 && w?.SceneKey != 0 && inScene > 150)
@@ -116,6 +119,13 @@ public partial class Bot : MonoBehaviour
         if (test == "cctv") CctvTest(t, ses);
         if (test == "follow") FollowTest(t, ses, s);
         if (test == "figure") FigureTest(t, ses, w);
+        if (test == "breakhit") BreakHitTest(t, ses, w);
+        if (test == "bump") BumpTest(t, ses, w);
+        if (test == "toolcarry") ToolCarryTest(t, ses, w);
+        if (test == "footsteps") FootstepsTest(t, ses, w);
+        if (test == "doorsync") DoorSyncTest(t, ses, w);
+        if (test == "products") ProductsTest(t, ses, w);
+        if (test == "lamps") LampsTest(t, ses, w);
         if (test == "world2") { try { World2Test(t, ses, w); } catch (Exception e) { Plugin.L.LogError($"WORLD2 bot step {step} failed: {e}"); } }
         if (test != "jobs" && t > Env.Int("CSCCOOP_QUIT_AFTER", 40))
         {
@@ -799,6 +809,17 @@ public partial class Bot : MonoBehaviour
     // CCTV laptop (Smart House, job 5: run-pair sets CSCCOOP_MISSION=5 for the host, CSCCOOP_ANY_JOB=1): the client
     // hacks it and deletes a recording; both log hacked and whether that recording is still in the folder.
     string ctName; float ctAt;
+
+    // Deletes a recording through the laptop's presenter, as a click in its folder does.
+    static void DeleteInUi(HackableComputerModel m, string name)
+    {
+        HackableComputerPresenter presenter = null;
+        foreach (var p in Resources.FindObjectsOfTypeAll<HackableComputerPresenter>()) if (p.model != null && p.model.Pointer == m.Pointer) presenter = p;
+        CCTVRecord record = null;
+        if (m.listOfRecordsInFolder != null) foreach (var rec in m.listOfRecordsInFolder) if (Cctv.IsRecord(rec) && rec.recordName == name) record = rec;
+        if (presenter != null && Cctv.IsRecord(record)) presenter.HandleFileDelete(record);
+        else Plugin.L.LogWarning($"CCTVTEST cannot delete '{name}' in the UI (presenter {presenter != null}, record {Cctv.IsRecord(record)})");
+    }
     void CctvTest(float t, Session ses)
     {
         var m = Cctv.Laptops != null && Cctv.Laptops.Count > 0 ? Cctv.Laptops[0] : null;
@@ -808,16 +829,34 @@ public partial class Bot : MonoBehaviour
             case 0 when t > 5:
                 var list = m.listOfRecordsInFolder;
                 ctName = null;
-                if (list != null) foreach (var rec in list) if (rec != null && !string.IsNullOrEmpty(rec.recordName)) { ctName = rec.recordName; break; }
+                if (list != null) foreach (var rec in list) if (Cctv.IsRecord(rec) && !string.IsNullOrEmpty(rec.recordName)) { ctName = rec.recordName; break; }
                 ctName ??= "CCTV_TEST_RECORD";
                 Plugin.L.LogInfo($"CCTVTEST laptop '{m.name}', {list?.Count ?? 0} recordings, role record '{ctName}'");
-                if (!ses.IsHost) { m.Hack(true); m.RemoveRecordInFolder(ctName); Plugin.L.LogInfo("CCTVTEST client hacked and deleted"); }
+                // the way the laptop's UI deletes: HackableComputerPresenter.HandleFileDelete
+                if (!ses.IsHost) { m.Hack(true); DeleteInUi(m, ctName); Plugin.L.LogInfo("CCTVTEST client hacked and deleted"); }
                 ctAt = Time.unscaledTime + 8; step = 1; break;
             case 1 when Time.unscaledTime > ctAt:
                 bool present = false;
-                if (m.listOfRecordsInFolder != null) foreach (var rec in m.listOfRecordsInFolder) if (rec != null && rec.recordName == ctName) present = true;
+                if (m.listOfRecordsInFolder != null) foreach (var rec in m.listOfRecordsInFolder) if (Cctv.IsRecord(rec) && rec.recordName == ctName) present = true;
                 Plugin.L.LogInfo($"CCTVTEST hacked {m.IsHacked} record present {present}");
-                step = 2; break;
+                // then the client deletes all the others: the job's "delete the recordings" objective
+                if (!ses.IsHost && m.listOfRecordsInFolder != null)
+                {
+                    var names = new System.Collections.Generic.List<string>();
+                    foreach (var rec in m.listOfRecordsInFolder) if (Cctv.IsRecord(rec) && rec.recordName != null) names.Add(rec.recordName);
+                    foreach (var n in names) DeleteInUi(m, n);
+                    Plugin.L.LogInfo($"CCTVTEST client deleted the other {names.Count}");
+                }
+                ctAt = Time.unscaledTime + 8; step = 2; break;
+            case 2 when Time.unscaledTime > ctAt:
+                int left = 0;
+                if (m.listOfRecordsInFolder != null) foreach (var rec in m.listOfRecordsInFolder) if (Cctv.IsRecord(rec)) left++;
+                string quest = null;
+                foreach (var p in Resources.FindObjectsOfTypeAll<HackableComputerPresenter>())
+                    if (p.model != null && p.model.Pointer == m.Pointer) quest = p.questName;
+                string qs = string.IsNullOrEmpty(quest) ? "-" : PixelCrushers.DialogueSystem.QuestLog.GetQuestState(quest).ToString();
+                Plugin.L.LogInfo($"CCTVTEST recordings left {left} quest '{quest}' {qs}");
+                step = 3; break;
         }
     }
 
@@ -1100,6 +1139,8 @@ public partial class Bot : MonoBehaviour
             if (src == null) continue;
             foreach (var m in src) Plugin.L.LogInfo($"BOT mission {m.id} '{m.displayName}' scene {m.scene} completed {m.completed} active {m.active}");
         }
+        if (mc.missions?.data != null)
+            foreach (var m in mc.missions.data) if (m != null) Plugin.L.LogInfo($"BOT known mission {m.id} '{m.displayName}' scene {m.scene}");
     }
 
     // Client: walk up to the nearest loose item, grab it, back away with it, throw it. Host: try to take

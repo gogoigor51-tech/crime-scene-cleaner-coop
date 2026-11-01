@@ -19,7 +19,14 @@ public sealed class GameWorld : IWorld
     string scene = "";
 
     // Remote-driven items: target from the owner, and what the game had before we took over.
-    struct Remote { public bool On; public bool WasKinematic, AnimWasOn; public Vector3 Pos; public Quaternion Rot; public Vector3 Vel; public bool Fresh; }
+    struct Remote
+    {
+        public bool On; public bool WasKinematic, AnimWasOn; public Vector3 Pos; public Quaternion Rot; public Vector3 Vel; public bool Fresh;
+        // Items only: Held from the owner; StillSince = when the owner's samples stopped moving; Local = the owner has
+        // it at rest and this machine runs its physics (see Smooth); LocalAt/ClaimAt = when that started / we claimed it.
+        public bool Held, Local; public float StillSince, LocalAt, ClaimAt;
+        public int Claims; public float ClaimsSince, AwakeUntil;   // bump claims in the current minute; physics here until then
+    }
     Remote[] remote = Array.Empty<Remote>();
 
     public uint SceneKey => key;
@@ -52,6 +59,9 @@ public sealed class GameWorld : IWorld
         lastPos = Array.Empty<Vector3>(); movedAt = Array.Empty<float>();
         Taints.Clear(); taintIndex.Clear(); Bodies.Clear(); bodyIndex.Clear(); Garbage.Clear(); garbageIndex.Clear();
         foreach (var t in tables) t.Clear();
+        // The old job's fingerprints too: compared with the host's new job under the new scene name they "differed"
+        // all 31 tables on the client while it was still loading (harmless, BuildTable reset it, but logged).
+        Parts.Clear(); Off.Clear();
         Player = null; Grabber = null;
     }
 
@@ -107,7 +117,7 @@ public sealed class GameWorld : IWorld
         Plugin.L.LogInfo($"COOP table {scene}: {Items.Count} items, {Taints.Count} stains, {Bodies.Count} bodies, {Garbage.Count} van items{more}, key {key:X8}");
     }
 
-    static void Bodies_OnTable() { CscCoop.Bodies.OnTable(); Furniture.OnScene(); Objectives.OnScene(); Cctv.OnScene(); CscCoop.Bodies.OnScene(); }
+    static void Bodies_OnTable() { CscCoop.Bodies.OnTable(); Furniture.OnScene(); Doors.OnScene(); Objectives.OnScene(); Cctv.OnScene(); CscCoop.Bodies.OnScene(); }
     // Scene tables of the other shared things, identified by indexed hierarchy path.
     public interface ITable { string Name { get; } int Count { get; } void Build(GameWorld w, ref uint h); void Clear(); }
     public sealed class Table<T> : ITable where T : Component
@@ -155,6 +165,10 @@ public sealed class GameWorld : IWorld
         foreach (var c in UnityEngine.Object.FindObjectsOfType<T>(true))
         {
             if (c == null || c.gameObject.scene.name != scene) continue;
+            // Each player's own tools (lamps, buckets: PortableItem) are no scene objects: they differ per player,
+            // so a table with them differed and was switched off, or matched and a replay by index switched the other
+            // player's own lamp (owner's test). Dyn shares them.
+            if (c.GetComponentInParent<PortableItem>() != null && Env.Get("CSCCOOP_MUTANT") != "lamp-index") continue;
             if (pos == null) { rows.Add((IndexedPath(c.transform), c)); continue; }
             var p = pos(c);
             rows.Add(($"{Path(c.transform)}|{Mathf.RoundToInt(p.x * 100)},{Mathf.RoundToInt(p.y * 100)},{Mathf.RoundToInt(p.z * 100)}", c));
@@ -167,15 +181,18 @@ public sealed class GameWorld : IWorld
     public static string IndexedPathOf(Transform t) => IndexedPath(t);
 
     // The object at an IndexedPath in the active scene (null if this machine's hierarchy differs).
+    // Segments end in "#<sibling index>": split there, not at every '/', since object names can hold one
+    // (Developers' Hell: the floors are under "WALLS/WINDOWS/FLOORS", so no stain on them was found there:
+    // footprints and blood on those floors never appeared for the other player).
+    static readonly System.Text.RegularExpressions.Regex Segment = new(@"(.+?)#(\d+)(?:/|$)");
+
     public static GameObject FindByIndexedPath(string path)
     {
-        var parts = path.Split('/');
         Transform cur = null;
-        foreach (var part in parts)
+        foreach (System.Text.RegularExpressions.Match m in Segment.Matches(path))
         {
-            int hash = part.LastIndexOf('#');
-            if (hash < 0 || !int.TryParse(part.Substring(hash + 1), out int idx)) return null;
-            string name = part.Substring(0, hash);
+            int idx = int.Parse(m.Groups[2].Value);
+            string name = m.Groups[1].Value;
             Transform next = null;
             if (cur == null)
             {
@@ -325,7 +342,9 @@ public sealed class GameWorld : IWorld
     {
         if ((uint)i >= (uint)remote.Length) return;
         ref var r = ref remote[i];
-        r.Pos = U(s.Pos); r.Rot = U(s.Rot); r.Vel = U(s.Vel);
+        var pos = U(s.Pos);
+        if (!r.Fresh || (pos - r.Pos).sqrMagnitude > 4e-6f || Quaternion.Angle(r.Rot, U(s.Rot)) > 0.5f || s.Held) r.StillSince = Time.unscaledTime;
+        r.Pos = pos; r.Rot = U(s.Rot); r.Vel = U(s.Vel); r.Held = s.Held;
         if (!r.Fresh) { r.Fresh = true; Snap(i); }
     }
 
@@ -338,9 +357,14 @@ public sealed class GameWorld : IWorld
         var rb = g.Rb;
         if (!local && !r.On)
         {
-            r.On = true; r.Fresh = false;
+            r.On = true; r.Fresh = false; r.Local = false; r.StillSince = Time.unscaledTime;
             r.Pos = g.transform.position; r.Rot = g.transform.rotation;
             if (rb != null) { r.WasKinematic = rb.isKinematic; rb.isKinematic = true; }
+        }
+        else if (local && r.On && r.Local)
+        {
+            // Our own physics already runs it (we bumped it and claimed it): keep it where it is, moving as it moves.
+            r.On = false; r.Local = false;
         }
         else if (local && r.On)
         {
@@ -429,12 +453,28 @@ public sealed class GameWorld : IWorld
     }
 
     // Moves remote-driven items toward their owner's latest state.
+    // Near the action, items the owner has at rest run on this machine's physics too (like the earlier csc-coop
+    // prototype). Kept kinematic, a client's thrown item bounced off every resting item as off a wall and nothing
+    // could be knocked over (owner's test on Developers' Hell). Everywhere at once they didn't work either: started
+    // from the owner's pose, vases and bottles tipped over by themselves and piles settled apart (bump suite). So a
+    // resting item wakes only within reach of this machine's player or of an item this machine is moving, and when
+    // its physics here knocks it away (fast), we claim it and the others follow. Once all is still again it goes
+    // back to the owner's spot, kinematic. Carried or moving items follow the owner kinematically as before.
+    const float RestAfter = 0.4f, BumpDistance = 0.03f, BumpAngle = 6f, LocalGrace = 0.3f, ClaimRetry = 1f, BumpSpeed = 0.5f, BumpSpin = 3f,
+        ClaimWindow = 60f, ClaimMax = 3, WakeEvery = 0.1f, WakeFor = 1.5f, PlayerReach = 1.2f, ItemReach = 0.8f;
+    public static int Bumped, Woken;
+    float nextWake;
+
     public void Smooth(float dt)
     {
         float k = 1 - Mathf.Exp(-dt * 30);
+        float now = Time.unscaledTime;
+        WakeNearby(now, now >= nextWake);
+        if (now >= nextWake) nextWake = now + WakeEvery;
         for (int i = 0; i < remote.Length; i++)
         {
             if (!remote[i].On) continue;
+            if (i < Items.Count && LocalPhysics(i, now)) continue;
             KeepKinematic(i);
             if (!remote[i].Fresh || i >= Items.Count && CscCoop.Bodies.IsShouldered(i - Items.Count)) continue;
             var t = EntityTransform(i);
@@ -442,6 +482,70 @@ public sealed class GameWorld : IWorld
             var pos = Vector3.Distance(t.position, remote[i].Pos) > 3 ? remote[i].Pos : Vector3.Lerp(t.position, remote[i].Pos, k);
             t.SetPositionAndRotation(pos, Quaternion.Slerp(t.rotation, remote[i].Rot, k));
         }
+    }
+
+    // Remote items within reach of our player (every WakeEvery) or of an item we move (every frame, reaching as far
+    // as it flies in 0.3 s: a thrown item hits within a frame or two) get physics here for a moment.
+    readonly List<int> movers = new();
+    void WakeNearby(float now, bool player)
+    {
+        var s = CoopRunner.Instance?.Session;
+        if (s == null || remote.Length == 0 || Env.Get("CSCCOOP_MUTANT") == "kinematic-rest") return;
+        if (player && Player != null) Wake(Player.transform.position + Vector3.up * 0.9f, PlayerReach, now);
+        movers.Clear();
+        for (int i = 0; i < Items.Count && i < remote.Length; i++)
+            if (!remote[i].On && s.OwnerOf(i) == s.Me && Items[i] != null && !StillFor(i)) movers.Add(i);
+        foreach (var i in movers)
+        {
+            var rb = Items[i].Rb;
+            float speed = rb != null && !rb.isKinematic ? rb.velocity.magnitude : 0;
+            Wake(Items[i].transform.position, ItemReach + speed * 0.3f, now);
+        }
+    }
+
+    void Wake(Vector3 at, float radius, float now)
+    {
+        foreach (var c in Physics.OverlapSphere(at, radius))
+        {
+            if (c == null || c.attachedRigidbody == null) continue;
+            int i = IndexOf(c.attachedRigidbody.GetComponentInParent<GrabableItemController>());
+            if (i < 0 || i >= Items.Count || !remote[i].On) continue;
+            if (remote[i].AwakeUntil < now) Woken++;
+            remote[i].AwakeUntil = now + WakeFor;
+        }
+    }
+
+    // True when item i runs on this machine's physics this frame (the owner has it at rest, and it is near us).
+    bool LocalPhysics(int i, float now)
+    {
+        ref var r = ref remote[i];
+        var g = Items[i];
+        var rb = g != null ? g.Rb : null;
+        bool rest = r.Fresh && !r.Held && r.Vel.sqrMagnitude < 0.01f && now - r.StillSince >= RestAfter;
+        bool near = now < r.AwakeUntil || (r.Local && !StillFor(i));
+        if (rb == null || !rest || !near || g.IsHeld) { r.Local = false; return false; }
+        var t = g.transform;
+        if (!r.Local)
+        {
+            r.Local = true; r.LocalAt = now;
+            t.SetPositionAndRotation(r.Pos, r.Rot);
+            rb.isKinematic = r.WasKinematic;
+            if (!rb.isKinematic) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; rb.Sleep(); }
+            return true;
+        }
+        if (rb.isKinematic || StillFor(i)) return true;   // the game keeps it kinematic (until a hit frees it), or nothing moved it
+        // Moving or not by Track's per-frame movement, not IsSleeping: a knocked item moved 20 cm here while its
+        // rigidbody still said asleep. A knock is fast; settling a little is not. At most ClaimMax claims a minute.
+        float d = Vector3.Distance(t.position, r.Pos), a = Quaternion.Angle(t.rotation, r.Rot);
+        bool fast = rb.velocity.magnitude > BumpSpeed || rb.angularVelocity.magnitude > BumpSpin;
+        if (now - r.ClaimsSince > ClaimWindow) { r.ClaimsSince = now; r.Claims = 0; }
+        if (fast && (d > BumpDistance || a > BumpAngle) && now - r.LocalAt > LocalGrace && now - r.ClaimAt > ClaimRetry && r.Claims < ClaimMax)
+        {
+            r.ClaimAt = now; r.Claims++; Bumped++;
+            if (Bumped <= 60) Plugin.L.LogInfo(FormattableString.Invariant($"COOP bumped item {i} ({g.name}) {d:F2} m {a:F0} deg from the owner's spot"));
+            CoopRunner.Instance?.Session?.OnLocalGrab(i);
+        }
+        return true;
     }
 
     // The game turns physics back on by itself (a punch, a bump, a body's Unfreeze); for something another
@@ -463,6 +567,21 @@ public sealed class GameWorld : IWorld
     {
         var t = EntityTransform(i);
         if (t != null) t.SetPositionAndRotation(remote[i].Pos, remote[i].Rot);
+    }
+
+    public string Describe(int i)
+    {
+        if ((uint)i >= (uint)remote.Length || i >= Items.Count) return "-";
+        var r = remote[i]; var rb = Items[i] != null ? Items[i].Rb : null;
+        return FormattableString.Invariant($"remote {r.On} local {r.Local} fresh {r.Fresh} held {r.Held} vel {r.Vel.magnitude:F2} still {Time.unscaledTime - r.StillSince:F1}s kinematic {rb != null && rb.isKinematic} sleeping {rb != null && rb.IsSleeping()} off {(Items[i] != null ? Vector3.Distance(Items[i].transform.position, r.Pos) : -1):F2}");
+    }
+
+    // The item's kinematic state as the game has it (remote-driven items are kinematic here for the session).
+    public bool GameKinematic(int i)
+    {
+        var rb = (uint)i < (uint)Items.Count && Items[i] != null ? Items[i].Rb : null;
+        if (rb == null) return true;
+        return (uint)i < (uint)remote.Length && remote[i].On ? remote[i].WasKinematic : rb.isKinematic;
     }
 
     public bool IsRemoteDriven(int i) => (uint)i < (uint)remote.Length && remote[i].On;

@@ -35,13 +35,11 @@ untested. [Download the latest release](../../releases/latest). Русская �
 | Evidence, valuables (on both reports), secrets, cassettes, broken objects and shards | works |
 | Story objects (e.g. the attic hatch in the first job), objectives added during a job, objective counters | works |
 | Jobs where the two saves differ a little (Villa): only the differing table stops being shared | works (0.4.2) |
-| CCTV laptop (Smart House and later): the hack is shared | works |
+| CCTV laptop (Smart House and later): the hack and deleted recordings are shared, the objective counts for both | hack: works; recordings: bot suite only, not tested by players |
 | Job restart from the pause menu restarts it for both | 0.4.2, not tested by players |
 
 ## Known issues
 
-- **CCTV recordings:** deleting the recordings has to be done by each player on their own laptop; the objective
-  doesn't count for the other player.
 - **Objective maximums can differ** between players (e.g. furniture 1/21 vs 1/26): the game itself raises the
   maximum when furniture that already stood in place is picked up and put back.
 - **Upgraded tools** (e.g. the microfibre mop) may show as the basic tool of the same kind on the other player's
@@ -49,6 +47,15 @@ untested. [Download the latest release](../../releases/latest). Русская �
 - The walkie-talkie in the Spa job is shared in code but wasn't tested by players.
 - Skipping the intro cutscene can leave the pizza box hanging next to the player in the apartment.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
+- Found on Developers' Hell, not fixed yet:
+  - **Elevator:** when one player rides it, every other player is moved up or down too, even outside it.
+  - **Heavy furniture lifted by two players at once** ends up not lifted on one player's screen.
+  - **Two trash bags merging** make duplicate bags for a while before they end up as one big bag.
+  - **Super Stacker arcade machine:** using it opens the minigame for all players; the other players then
+    disappear, the connection seems lost and the debug panel says "player in another place" although everyone is
+    in the same level, and the world stops being shared.
+  - **Personal flashlight:** players can't see each other's flashlight.
+  - **End of a job:** the score animations on the report screen play twice, about a second apart.
 
 ## Bug reports (F9)
 
@@ -65,7 +72,7 @@ player's machine under one id, then asks "what's wrong?". Reports land in `BepIn
   (`dotnet run --project src/CoopCore.Tests`).
 - `src/CscCoop`: the plugin. `NOTES.md` is the full engineering log: what each game system does, why each fix was
   needed, and the evidence.
-- `tools/run-pair.ps1 -Test <items|stains|bodies|doors|trash|world2|jobs|laptop|cctv|figure>` runs two copies on one
+- `tools/run-pair.ps1 -Test <items|stains|bodies|doors|trash|world2|jobs|laptop|cctv|figure|breakhit>` runs two copies on one
   PC with bots over localhost and checks the result (`tools/<test>_report.py`); `tools/run-census.ps1` lists every
   component type in every job.
 
@@ -87,8 +94,14 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 
 **Общее:** заказы, предметы, тела (без двойного счёта), кровь, мусор, двери, ящики, лифты, питание, конвейеры,
 терминалы, мебель, улики, ценности, секреты, кассеты, сюжетные объекты (чердак), счётчики заданий, взлом ноутбука
-камер. Друг виден с инструментом в руках и телом на плече.
+камер и удалённые записи (проверено ботами, вживую ещё нет). Друг виден с инструментом в руках и телом на плече.
 
-**Известные проблемы:** удалять записи камер каждый должен у себя; максимум мебели может отличаться (так считает
+**Известные проблемы:** максимум мебели может отличаться (так считает
 сама игра); улучшенный инструмент у друга может выглядеть базовым; рация в Spa и перезапуск заказа вживую не
-проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире.
+проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире. Найдено в
+Developers' Hell, ещё не исправлено: лифт перемещает всех игроков, даже тех, кто не в нём; тяжёлая мебель, которую
+поднимают двое одновременно, у одного остаётся неподнятой; два сливающихся мешка с мусором какое-то время плодят
+копии; игровой автомат Super Stacker открывает мини-игру у всех, после чего другие игроки пропадают, связь
+теряется («игрок в другом месте», хотя все на одном уровне) и мир перестаёт синхронизироваться; личный фонарик
+другого игрока не виден; в конце заказа анимации очков на экране отчёта проигрываются дважды, примерно через
+секунду.

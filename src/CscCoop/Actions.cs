@@ -23,8 +23,10 @@ public static class Actions
         "Interactable.Interact",
         // A click on a ShortcutDoors goes Interact -> TryOpen (first time) / Toggle, which tween by themselves, not
         // through OpenDoors (ISIL; owner's manual test). Interact itself is not replayed: it checks the clicking
-        // player's side of the door, which the other player may not be on.
-        "ShortcutDoors.Toggle", "ShortcutDoors.TryOpen",
+        // player's side of the door, which the other player may not be on. Toggle is not here any more: replayed
+        // as a toggle, any missed or doubled event left the door inverted for good (owner's test on Developers'
+        // Hell); Doors shares the open/closed state after every door path instead. TryOpen only rattles.
+        "ShortcutDoors.TryOpen",
         "LabLiftLever.Interact", "LabSecretLiftController.Interact", "LabLiftController.ChangeLiftPosition",
         "ExtendableLadder.Interact", "ElectrickShockBox.Interact", "ElectricShockLeaver.Interact",
         "ChangeObjectPositionQueue.Interact", "ElectronicPicture.Interact", "BathController.Interact",
@@ -90,7 +92,9 @@ public static class Actions
     {
         var asm = typeof(Openable).Assembly;
         var tables = new Dictionary<Type, Act>();
-        foreach (var entry in Whitelist)
+        var entries = new List<string>(Whitelist);
+        if (Env.Get("CSCCOOP_MUTANT") == "door-old") entries.Add("ShortcutDoors.Toggle");   // the 0.4.2 rule
+        foreach (var entry in entries)
         {
             var dot = entry.IndexOf('.');
             var type = asm.GetType(entry.Substring(0, dot));
@@ -137,6 +141,11 @@ public static class Actions
         return m.Invoke(c, null);
     }
 
+    // A player's own tool (PortableItem: lamps, buckets...) is in the scene table too, at the same place on every
+    // machine, so a replay by index switched the other player's own lamp (owner's test: turning on my lamp 1 turned
+    // on the friend's lamp 1). Tools are shared by Dyn, with the tool's own state.
+    static bool InTool(Component c) => c.GetComponentInParent<PortableItem>() != null && Env.Get("CSCCOOP_MUTANT") != "lamp-index";
+
     static void Pre() => depth++;
 
     static void Post(object __instance, MethodBase __originalMethod, object[] __args)
@@ -146,6 +155,7 @@ public static class Actions
         if (byMethod.TryGetValue(__originalMethod, out var a0) && CastTo(c, a0.Type) == null) return;   // a folded call on another type
         if (Skip.Contains(c.GetIl2CppType().Name)) return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("Hub")) return;   // each player's own apartment
+        if (InTool(c)) return;
         if (!byMethod.TryGetValue(__originalMethod, out var act)) return;
         int i = act.IndexOf(c);
         if (i < 0) return;
@@ -173,7 +183,7 @@ public static class Actions
         if ((uint)id >= (uint)acts.Count) return;
         var act = acts[id];
         var target = act.Get(i);
-        if (target == null) return;
+        if (target == null || InTool(target)) return;
         Plugin.L.LogInfo($"COOP action {act.Name} on {act.Type.Name} {i} from another player");
         var typed = CastTo(target, act.Type);
         if (typed == null) return;
