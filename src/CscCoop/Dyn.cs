@@ -32,6 +32,10 @@ public static class Dyn
     sealed class Obj
     {
         public uint Id;
+        public byte Owner;   // who simulates it now (for bags meeting: the lower number merges)
+        public GarbageBagConnector Bag;
+        public int SentSize = -1;
+        public Vector3 Vel;   // bags: the owner's velocity (a copy here is kinematic)
         public Kind Kind;
         public string Name;
         public GameObject Go;
@@ -72,7 +76,7 @@ public static class Dyn
         if (building || go == null || byGo.ContainsKey(go.Pointer)) return;
         var s = S;
         byte me = s == null ? (byte)0 : s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
-        var o = new Obj { Id = ((uint)me << 20) | (++counter & 0xFFFFF), Kind = kind, Name = PrefabName(go.name), Go = go, Mine = true };
+        var o = new Obj { Id = ((uint)me << 20) | (++counter & 0xFFFFF), Kind = kind, Name = PrefabName(go.name), Go = go, Mine = true, Owner = me, Bag = go.GetComponent<GarbageBagConnector>() };
         if (kind == Kind.Tool) Equip(o);
         byId[o.Id] = o; byGo[go.Pointer] = o;
         Spawned++;
@@ -89,6 +93,7 @@ public static class Dyn
         if (sceneKey != W.SceneKey) OnScene();
         if (!s.Synced) return;
         UvSlots.Tick();
+        BagsTick();
         float now = Time.unscaledTime;
         foreach (var o in new List<Obj>(byId.Values))
         {
@@ -102,6 +107,7 @@ public static class Dyn
                 if (o.Washer != null && Mathf.Abs(o.Washer.waterLevel - o.SentWater) > 0.01f) moved = true;
                 if ((o.Liquid != null || o.Washer != null) && Buffs(o) != o.SentBuffs) moved = true;
                 if (o.Lamp != null && o.Lamp.isOn != o.SentLamp) moved = true;
+                if (o.Bag != null && o.Bag.CurrentSize != o.SentSize) moved = true;
                 if (!moved && o.Go.activeInHierarchy == true && o.NextSend > 0) continue;
                 o.NextSend = now + 0.1f;
                 SendState(o, o.Go.activeInHierarchy, false);
@@ -152,6 +158,11 @@ public static class Dyn
             w.Write(liquid); w.Write(water); w.Write(taint);
             w.Write(buffs); w.Write(washer);   // last: 0.4.2 readers stop before them
             w.Write(lamp); w.Write(lampOn);
+            w.Write(o.SentSize = o.Bag != null ? o.Bag.CurrentSize : -1);
+            var brb = o.Bag != null && o.Go != null ? o.Go.GetComponent<Rigidbody>() : null;
+            var bv = brb != null && !brb.isKinematic ? brb.velocity : Vector3.zero;
+            w.Write(bv.x); w.Write(bv.y); w.Write(bv.z);
+            w.Write(o.Bag != null && o.Bag.garbageItem != null ? o.Bag.garbageItem.trashValue : 0f);
         }, StateBase | o.Id);
     }
 
@@ -168,6 +179,10 @@ public static class Dyn
         bool washer = more && r.ReadBoolean();
         bool lampKnown = more && r.BaseStream.Position < r.BaseStream.Length;
         bool lamp = lampKnown && r.ReadBoolean(), lampOn = lampKnown && r.ReadBoolean();
+        int bagSize = r.BaseStream.Position + 4 <= r.BaseStream.Length ? r.ReadInt32() : -1;
+        bool bagMore = r.BaseStream.Position + 16 <= r.BaseStream.Length;
+        var bagVel = bagMore ? new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()) : Vector3.zero;
+        float bagFill = bagMore ? r.ReadSingle() : -1;
         byId.TryGetValue(id, out var o);
         if (o == null && kind == Kind.Shard)
         {
@@ -199,7 +214,7 @@ public static class Dyn
         {
             var go = Build(kind, name, pos, rot);
             if (go == null) return;
-            o = new Obj { Id = id, Kind = kind, Name = name, Go = go, Mine = false };
+            o = new Obj { Id = id, Kind = kind, Name = name, Go = go, Mine = false, Owner = (byte)(id >> 20), Bag = go.GetComponent<GarbageBagConnector>() };
             if (kind == Kind.Tool) Equip(o);
             byId[id] = o; byGo[go.Pointer] = o;
             Puppets++;
@@ -213,6 +228,8 @@ public static class Dyn
         }
         if (washer && o.Washer != null && Mathf.Abs(o.Washer.waterLevel - water) > 0.005f) { o.Washer.waterLevel = water; o.Washer.SetWaterLevel(); }
         // Switch sets the light, Interact flips isOn (earlier prototype's lamp sync)
+        if (bagSize > 0 && o.Bag != null && o.Bag.CurrentSize != bagSize) o.Bag.CurrentSize = bagSize;
+        if (o.Bag != null) { o.Vel = bagVel; if (bagFill >= 0 && o.Bag.garbageItem != null) o.Bag.garbageItem.trashValue = bagFill; }
         if (lamp && o.Lamp != null && o.Lamp.isOn != lampOn) { o.Lamp.isOn = lampOn; o.Lamp.Switch(lampOn); Plugin.L.LogInfo($"COOP {o.Name} {o.Id:X} switched {(lampOn ? "on" : "off")} by its player"); }
         if (buffs != null && buffs != o.AppliedBuffs && (o.Liquid != null || o.Washer != null))
         {
@@ -326,7 +343,7 @@ public static class Dyn
 
     static void TakeOver(Obj o, CoopCore.Session s)
     {
-        o.Mine = true; o.NextSend = 0;
+        o.Mine = true; o.NextSend = 0; o.Owner = s.Me;
         foreach (var rb in o.Go.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = false;
         byte me = s.Me;
         WorldEvents.Send(Ev.DynTake, w => { w.Write(o.Id); w.Write(me); });
@@ -361,11 +378,12 @@ public static class Dyn
     {
         uint id = r.ReadUInt32(); r.ReadByte();
         if (!byId.TryGetValue(id, out var o) || o.Go == null) return;
+        o.Owner = from;
         if (o.Mine)
         {
             var g = W.Grabber;
             if (g != null && g.GrabbedRb != null && g.GrabbedRb.gameObject.Pointer == o.Go.Pointer) g.TryRelease();
-            o.Mine = false;
+            o.Mine = false; o.Owner = from;
             foreach (var rb in o.Go.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
             o.TargetPos = o.Go.transform.position; o.TargetRot = o.Go.transform.rotation;
             Plugin.L.LogInfo($"COOP player {from} took over {o.Kind.ToString().ToLowerInvariant()} {o.Id:X} ({o.Name})");
@@ -373,8 +391,59 @@ public static class Dyn
     }
 
     // A puppet must not run game logic that changes the world: bags merging on collision happen on the owner.
+    //
+    // Two players' bags meeting. The game merges in each bag's OnCollisionEnter, each playing its own part: the bigger
+    // bag (or with equal sizes the faster) grows to the sum, the other gives its fill and shrinks away (isInAnimation
+    // guards a bag already merging). Each machine ran only its own bag's part, against a kinematic copy of the other
+    // whose speed is 0 there, so when both bags moved each machine had its own bag grow: two big bags, copies living on
+    // (owner's test: duplicates until they ended as one bag; bagmerge suite: the client had a bag of 2, the host two
+    // of 1, or both bags of 2). Now the machine with the lower player number merges them alone, once: it takes the
+    // other bag over and does what the two parts do (IncreaseBagSize on the winner, the fill moved over, DestroyBag on
+    // the other), picking the winner the game's way with the owner's velocity; the other machine leaves the pair
+    // alone. The shrunk bag's end and the grown bag's size, scale and fill go out as their state.
+    static readonly HashSet<IntPtr> merging = new();
+    public static int Merged;
+
     [HarmonyPatch(typeof(GarbageBagConnector), nameof(GarbageBagConnector.OnCollisionEnter))] [HarmonyPrefix]
-    static bool BagCollision(GarbageBagConnector __instance) => !IsPuppet(__instance.gameObject);
+    static bool BagCollision(GarbageBagConnector __instance, Collision collision)
+    {
+        var bag = __instance.TryCast<GarbageBagConnector>();
+        if (bag == null) return true;
+        if (IsPuppet(bag.gameObject) || merging.Contains(bag.gameObject.Pointer)) return false;
+        var s = S;
+        var otherGo = collision != null && collision.rigidbody != null ? collision.rigidbody.gameObject : null;
+        if (s == null || !s.Synced || otherGo == null) return true;
+        if (merging.Contains(otherGo.Pointer)) return false;
+        if (!byGo.TryGetValue(otherGo.Pointer, out var other) || other.Kind != Kind.Bag || other.Go == null || other.Mine) return true;
+        if (Env.Get("CSCCOOP_MUTANT") == "bag-local") return true;
+        if (s.Me > other.Owner || !byGo.TryGetValue(bag.gameObject.Pointer, out var mine)) return false;   // theirs to merge
+        Merge(mine, other, s);
+        return false;
+    }
+
+    static void Merge(Obj x, Obj y, CoopCore.Session s)
+    {
+        var bx = x.Bag; var by = y.Bag;
+        if (bx == null || by == null || bx.isInAnimation || by.isInAnimation) return;
+        int sum = bx.CurrentSize + by.CurrentSize;
+        var perks = new Il2CppSystem.Collections.Generic.List<PerkID>(); perks.Add((PerkID)53);
+        int max = 1 + (int)(PerksController.Instance != null ? PerksController.Instance.GetUnlockedPerkValues(perks) : 0);
+        if (sum > max) return;
+        TakeOver(y, s);
+        var xrb = x.Go.GetComponent<Rigidbody>();
+        float vx = xrb != null && !xrb.isKinematic ? xrb.velocity.magnitude : 0, vy = y.Vel.magnitude;
+        var (win, lose) = bx.CurrentSize > by.CurrentSize ? (x, y) : by.CurrentSize > bx.CurrentSize ? (y, x) : vx >= vy ? (x, y) : (y, x);
+        merging.Add(win.Go.Pointer); merging.Add(lose.Go.Pointer);
+        var scale = Vector3.Max(win.Go.transform.localScale, lose.Go.transform.localScale);
+        if (win.Bag.garbageItem != null && lose.Bag.garbageItem != null) win.Bag.garbageItem.trashValue += lose.Bag.garbageItem.trashValue;
+        win.Bag.IncreaseBagSize(scale, sum);
+        lose.Bag.DestroyBag();
+        Merged++;
+        Plugin.L.LogInfo($"COOP bags {x.Id:X} and {y.Id:X} merged here: {win.Id:X} grew to {sum}, {lose.Id:X} goes");
+    }
+
+    // A bag that finished growing can merge again.
+    public static void BagsTick() { if (merging.Count > 0) merging.RemoveWhere(p => !byGo.TryGetValue(p, out var o) || o.Go == null || o.Bag == null || !o.Bag.isInAnimation); }
 
     // A bag of ours went into the van.
     public static bool OnCollected(GarbageItem gi)

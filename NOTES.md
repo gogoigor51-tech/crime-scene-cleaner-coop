@@ -253,14 +253,8 @@ the two copies' saves were at different missions.
   would have to come from the hub/intro scenes or Addressables. Unknown which.
 - Shards, using another player's bucket, re-dirtying (re-dirtying: not a gap, see the 2026-10-28 contribution).
 - Open, from the owner's test on Developers' Hell (2026-11-01; mission 11, scene GameDevOffice, run-pair -Mission 11):
-  - Elevator: one player's ride moves every other player too, even outside it. Not looked into; likely suspect:
-    Actions replays ElevatorDoor.SummonElevator / lift calls (GameDevOffice has 2 ElevatorDoor), and the elevator
-    script may move "the player" (each machine's own) rather than whoever stands in the car.
-  - Heavy furniture lifted by two players at the same moment ends up not lifted on one of them (Furniture: Heavy
-    events, HeavyGrabber; the grab check only refuses a piece someone else is already known to push).
-  - Two trash bags merging make duplicates until they end as one big bag: probably both owners run the merge
-    (GarbageBagConnector.OnCollisionEnter is blocked only on puppets, and a bag can be ours on one machine and the
-    other's bag ours on the other).
+  - Elevator, furniture lifted by two at once, merging bags: fixed (see "Elevator, furniture lifted by two, merging
+    bags" below).
   - Super Stacker arcade machine: using it opens the minigame for all players; the others then vanish, the
     connection seems lost, the debug panel says "player in another place" though all are in the same level, and the
     world stops syncing. Probably a replayed interaction (Actions: Interactable.Interact or similar) loads the
@@ -522,6 +516,45 @@ victims' bodies" only on the host, a restart only on the host.
   (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
+
+### Elevator, furniture lifted by two, merging bags (contributed, 2026-11-02)
+- Elevator (Developers' Hell: ElevatorGameDevParter and ElevatorGameDevCEO; elevatorprobe:
+  tools/run-probe.ps1 -Test elevatorprobe -Mission 11). The button in the car is an InteractablePanel on the
+  TeleportButton object, with a TeleportPlayer next to it. OnInteract -> ElevatorDoor.Teleport closes the doors, then
+  (a tween callback) TeleportPlayer.Teleport moves its `player` (each machine's own) and the rigidbodies in the car
+  (RigidbodiesInsideAreaChecker). InteractablePanel.Interact is a replayed action, so everyone was moved. Now
+  (Elevators.cs) a ride another player started (ElevatorDoor.Teleport while Applying) moves this machine's player only
+  if they stand in the car (its trigger box, read from size and transform: the game switches the trigger off around
+  a ride and a disabled collider's bounds are empty); otherwise TeleportNoPlayer (the game's own, for a summoned car).
+  The buttons are inactive in the test save until the story enables them (the suite switches them on). elevator
+  suite: ride 1, the client in the lower car rides up, the host outside stays; ride 2, both in the upper car, the
+  host presses, both go down. PASS 7/7; mutant elevator-all: the host outside went up too.
+- Furniture lifted into place by two players at once (FixableObject; there is no heavy furniture in GameDevOffice).
+  FurnitureFixController.TryFix starts a DOTween lift and the Load coroutine, which calls OnFix at the end (OnFix is a
+  replayed action). The first player's OnFix reaches the second while their lift runs: the piece leaves the fixable
+  layer, the highlight changes, the game breaks the fix (TryBreakFixing -> RevertTween) and moves the piece back to
+  where that lift started, while the game counts it fixed (IsCorrect). Now (FixGuard.cs) RevertTween on a piece that
+  is fixed puts it at its restore pose instead. fixlift suite: the host's lift ends first, the client's controller is
+  mid-lift (driven directly: a bot can't aim the game's ObjectHighlighter reliably, it picked the floor), then
+  TryBreakFixing as the highlight change does. PASS 5/5; mutant fix-revert: the client's piece IsCorrect but lying
+  0.6 m and 98 degrees off (the owner's symptom).
+- Merging bags. GarbageBagConnector.OnCollisionEnter (ISIL): a bag in animation returns; the bigger bag (equal sizes:
+  the faster) grows to the sum (IncreaseBagSize with the larger scale), the other adds its fill (GarbageItem.trashValue)
+  to it and shrinks away (DestroyBag); the merge needs perk 53 (bag size). Each machine ran only its own bag's part,
+  against a kinematic copy whose velocity is 0, so with both bags moving each machine's own bag grew: two bags of 2.
+  Now (Dyn.BagCollision/Merge) for two players' bags only the lower player number goes on: it takes the other bag
+  over and does both parts once (winner by size, then by velocity, with the owner's velocity now in the bag state);
+  the other machine leaves the pair alone. The bag state also carries the size and the fill. bagmerge suite (both bots
+  unlock all perks in the test copies; the host pushes its bag, the client's falls onto it): PASS 6/6 twice (one bag
+  of 2 on both, same spot, never more than the two bags made); mutant bag-local (the old rule): two bags left.
+  The perk limit is read for perk 53 alone; if the game's list holds more ids, a merge it would allow may be refused.
+- Regression with these (2026-11-02/03): trash 8/8, world2 20/20, stains 14/14, items 8/8, doors 17/17, cctv 7/7,
+  breakhit 6/6; on Developers' Hell elevator 7/7, fixlift 5/5, bagmerge 6/6, toolcarry 7/7, products 6/6, lamps 10/10,
+  doorsync 4/4, footsteps 5/5, bump 7/7; mutant elevator-all FAIL.
+- Test tooling: once the host sat in the intro scene for 8 minutes after the intro skip, and the client gave up. The
+  job loads when IntroController.OnIntroEnd sets CanLoadScene; skipping (Stop) half a second after the intro starts
+  can come before the game hooks OnIntroEnd up. HandsOff now calls OnIntroEnd itself when CanLoadScene is still false
+  after the Stop (it is, every run; the job then loads as before).
 
 ### Items at rest get physics near the action (contributed, 2026-11-01)
 - Owner's report (Developers' Hell): physics worse than in the earlier csc-coop prototype. Cause: the host owns every

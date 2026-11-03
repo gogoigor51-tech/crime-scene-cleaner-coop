@@ -146,6 +146,9 @@ public static class Actions
     // on the friend's lamp 1). Tools are shared by Dyn, with the tool's own state.
     static bool InTool(Component c) => c.GetComponentInParent<PortableItem>() != null && Env.Get("CSCCOOP_MUTANT") != "lamp-index";
 
+    // Test probes: the index of an object in the first action table that has it (-1 if none).
+    public static int IndexOfAny(Component c) { foreach (var a in acts) { int i = a.IndexOf(c); if (i >= 0) return i; } return -1; }
+
     static void Pre() => depth++;
 
     static void Post(object __instance, MethodBase __originalMethod, object[] __args)

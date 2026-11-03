@@ -41,6 +41,8 @@ public class Plugin : BasePlugin
         harmony.PatchAll(typeof(Trash));
         harmony.PatchAll(typeof(Quests));
         harmony.PatchAll(typeof(Furniture));
+        harmony.PatchAll(typeof(Elevators));
+        harmony.PatchAll(typeof(FixGuard));
         harmony.PatchAll(typeof(Objectives));
         harmony.PatchAll(typeof(Cctv));
         harmony.PatchAll(typeof(ToolLook));

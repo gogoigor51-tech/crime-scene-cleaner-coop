@@ -109,6 +109,9 @@ static class HandsOff
         introSkipped = true;
         Plugin.L.LogInfo($"COOP test: skipping the game intro at {d.time:F1}/{d.duration:F1} s");
         d.Stop();
+        // The job loads once OnIntroEnd sets CanLoadScene; it is hooked to the cinematic's end, and a Stop right after
+        // the intro starts can come before that: the game then waited for good (bump suite, host stuck 8 min).
+        if (!intro.CanLoadScene) { intro.OnIntroEnd(); Plugin.L.LogInfo($"COOP test: intro end called directly, can load {intro.CanLoadScene}"); }
     }
 
     // LoadingScreenController.WaitForSkipRoutine waits (up to 30 s) on this flag.
