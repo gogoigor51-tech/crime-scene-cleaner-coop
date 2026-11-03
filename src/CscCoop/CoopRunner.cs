@@ -235,6 +235,7 @@ public class CoopRunner : MonoBehaviour
             var carry = body ? PlayerFigure.Carry.Body : held >= 0 ? PlayerFigure.Carry.Item : PlayerFigure.Carry.None;
             g.Pose(GameWorld.U(pose.Pos), pose.Yaw, pose.Pitch, carry, pose.Tool, GameWorld.U(pose.ToolPos), GameWorld.U(pose.ToolRot), pose.ToolScale,
                 (pose.Flags & CoopCore.PlayerPose.PoseUsing) != 0, Time.deltaTime);
+            g.SetFlashlight((pose.Flags & CoopCore.PlayerPose.PoseFlashlight) != 0, World.Flashlight != null ? World.Flashlight.flashlight : null);
             if (body) Bodies.Shoulder(held, rp.Number, g);
             Ghost = g;
         }

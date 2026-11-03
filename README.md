@@ -26,6 +26,7 @@ untested. [Download the latest release](../../releases/latest). Русская �
 | Following the host into jobs, leaving together, each player's own report, money and skills | works |
 | Laptop jobs and mails in the apartment reach both | works |
 | Players see each other: a figure with head/limbs, the tool in hand, a carried body over the shoulder | works |
+| Each other's personal flashlight; arcade machines (Super Stacker) are each player's own | bot suites only, not tested by players |
 | Items: carry, throw, push with tools; another player's item can't be taken from their hands | works |
 | Bodies: carry, throw (falls on both), into the van; counted once per body | works (double count fixed in 0.4.2) |
 | Blood: cleaned stains, new stains, stains cleaned away; objective percent matches | works |
@@ -47,12 +48,8 @@ untested. [Download the latest release](../../releases/latest). Русская �
 - The walkie-talkie in the Spa job is shared in code but wasn't tested by players.
 - Skipping the intro cutscene can leave the pizza box hanging next to the player in the apartment.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
-- Found on Developers' Hell, not fixed yet:
-  - **Super Stacker arcade machine:** using it opens the minigame for all players; the other players then
-    disappear, the connection seems lost and the debug panel says "player in another place" although everyone is
-    in the same level, and the world stops being shared.
-  - **Personal flashlight:** players can't see each other's flashlight.
-  - **End of a job:** the score animations on the report screen play twice, about a second apart.
+- Found on Developers' Hell, not fixed yet: at the **end of a job** the score animations on the report screen play
+  twice, about a second apart.
 
 ## Bug reports (F9)
 
@@ -96,7 +93,5 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 **Известные проблемы:** максимум мебели может отличаться (так считает
 сама игра); улучшенный инструмент у друга может выглядеть базовым; рация в Spa и перезапуск заказа вживую не
 проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире. Найдено в
-Developers' Hell, ещё не исправлено: игровой автомат Super Stacker открывает мини-игру у всех, после чего другие игроки пропадают, связь
-теряется («игрок в другом месте», хотя все на одном уровне) и мир перестаёт синхронизироваться; личный фонарик
-другого игрока не виден; в конце заказа анимации очков на экране отчёта проигрываются дважды, примерно через
+Developers' Hell, ещё не исправлено: в конце заказа анимации очков на экране отчёта проигрываются дважды, примерно через
 секунду.

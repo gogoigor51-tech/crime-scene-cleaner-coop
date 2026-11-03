@@ -13,6 +13,7 @@ public sealed class GameWorld : IWorld
 {
     public FirstPersonController Player;
     public GrabController Grabber;
+    public FlashlightController Flashlight;   // the player's personal flashlight (on the look handle)
     public readonly List<GrabableItemController> Items = new();
     readonly Dictionary<IntPtr, int> indexOf = new();
     uint key;
@@ -42,11 +43,20 @@ public sealed class GameWorld : IWorld
     {
         string s = SceneManager.GetActiveScene().name;
         if (s != scene) { scene = s; Clear(); }
+        // The Super Stacker arcade (StackMiniGamePresenter.Open) switches the player off while it is played, in the
+        // same scene: dropping the table then made the others vanish, "in another place", and nothing synced until a
+        // rebuild (owner's test on Developers' Hell). A player switched off stays ours unless another one is active.
+        if (Player != null && !Player.gameObject.activeInHierarchy && key != 0 && Env.Get("CSCCOOP_MUTANT") != "arcade-clear")
+        {
+            var other = UnityEngine.Object.FindObjectOfType<FirstPersonController>();
+            if (other == null || other.Pointer == Player.Pointer) return;
+        }
         if (Player == null || !Player.gameObject.activeInHierarchy)
         {
             if (key != 0) Clear();
             Player = UnityEngine.Object.FindObjectOfType<FirstPersonController>();
             Grabber = Player != null ? Player.GetComponentInChildren<GrabController>() : null;
+            Flashlight = Player != null ? Player.GetComponentInChildren<FlashlightController>(true) : null;
             if (Grabber == null) Grabber = UnityEngine.Object.FindObjectOfType<GrabController>();
             return;
         }
@@ -248,6 +258,7 @@ public sealed class GameWorld : IWorld
         if (pose.HeldItem < 0 && be >= 0 && be < short.MaxValue) pose.HeldItem = (short)be;
         if (pose.HeldItem < 0 && Grabber != null && (Grabber.GrabbedRb != null || Grabber.IsGrabbingBody)) pose.HeldItem = short.MaxValue;   // carrying a bag
         ToolLook.Sample(t, ref pose);
+        if (Flashlight != null && Flashlight.IsOn && Env.Get("CSCCOOP_MUTANT") != "flashlight-off") pose.Flags |= PlayerPose.PoseFlashlight;
         return true;
     }
 

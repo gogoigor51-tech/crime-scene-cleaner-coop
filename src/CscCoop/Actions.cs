@@ -146,6 +146,23 @@ public static class Actions
     // on the friend's lamp 1). Tools are shared by Dyn, with the tool's own state.
     static bool InTool(Component c) => c.GetComponentInParent<PortableItem>() != null && Env.Get("CSCCOOP_MUTANT") != "lamp-index";
 
+    // An interactable whose OnInteract opens a UI panel is that player's own screen, like OpenUIPanelOnInteract. The
+    // Super Stacker arcade (Developers' Hell) is a plain Interactable -> StackMiniGamePresenter.EnterTheGame: replayed,
+    // it opened the minigame on every machine, which switches each player off (owner's test).
+    static bool OpensPanel(Component c)
+    {
+        if (Env.Get("CSCCOOP_MUTANT") == "arcade-replay") return false;
+        bool ui = false;
+        var ev = c.TryCast<Interactable>()?.OnInteract;
+        if (ev != null)
+            for (int k = 0; k < ev.GetPersistentEventCount(); k++)
+            {
+                var t = ev.GetPersistentTarget(k);
+                if (t != null && (t.TryCast<UIPanel>() != null || t.TryCast<Component>()?.GetComponent<UIPanel>() != null)) ui = true;
+            }
+        return ui;
+    }
+
     // Test probes: the index of an object in the first action table that has it (-1 if none).
     public static int IndexOfAny(Component c) { foreach (var a in acts) { int i = a.IndexOf(c); if (i >= 0) return i; } return -1; }
 
@@ -158,7 +175,7 @@ public static class Actions
         if (byMethod.TryGetValue(__originalMethod, out var a0) && CastTo(c, a0.Type) == null) return;   // a folded call on another type
         if (Skip.Contains(c.GetIl2CppType().Name)) return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("Hub")) return;   // each player's own apartment
-        if (InTool(c)) return;
+        if (InTool(c) || OpensPanel(c)) return;
         if (!byMethod.TryGetValue(__originalMethod, out var act)) return;
         int i = act.IndexOf(c);
         if (i < 0) return;

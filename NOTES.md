@@ -255,11 +255,7 @@ the two copies' saves were at different missions.
 - Open, from the owner's test on Developers' Hell (2026-11-01; mission 11, scene GameDevOffice, run-pair -Mission 11):
   - Elevator, furniture lifted by two at once, merging bags: fixed (see "Elevator, furniture lifted by two, merging
     bags" below).
-  - Super Stacker arcade machine: using it opens the minigame for all players; the others then vanish, the
-    connection seems lost, the debug panel says "player in another place" though all are in the same level, and the
-    world stops syncing. Probably a replayed interaction (Actions: Interactable.Interact or similar) loads the
-    minigame on every machine, and the minigame changes the active scene, so the scene key differs.
-  - Personal flashlight: not shown to the other players (PlayerPose carries the tool in hand, not the flashlight).
+  - Super Stacker arcade, personal flashlight: fixed (see "Super Stacker arcade, personal flashlight" below).
   - End of a job: the report's score animations play twice, about a second apart. Not looked into; likely the end of
     the job reaches the report twice on a machine: once from its own leave and once from the other player's
     (Ev.Leave -> Jobs.OnLeave), or a replayed call that opens the report.
@@ -516,6 +512,32 @@ victims' bodies" only on the host, a restart only on the host.
   (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
+
+### Super Stacker arcade, personal flashlight (contributed, 2026-11-03)
+- Super Stacker (arcadeprobe: tools/run-probe.ps1 -Test arcadeprobe -Mission 11). The machine in Developers' Hell
+  ('Gamingowe automaty/Gaming_machine ... (1)') is a plain Interactable whose OnInteract calls
+  StackMiniGamePresenter.EnterTheGame, a UIPanel; Open switches the player GameObject off while the minigame runs
+  (its own camera renders to the machine's screen), Close switches it back. It is not a scene change. Two faults:
+  Interactable.Interact is a replayed action, so the minigame opened on every machine; and GameWorld dropped its
+  table when the player was switched off (key 0 while open, the probe: 3637D7FC -> 0 -> 3637D7FC after closing),
+  so on the player at the machine the others vanished, "in another place", and nothing synced. Now Actions leaves out
+  an interactable whose OnInteract targets a UIPanel (the arcade; like OpenUIPanelOnInteract), and a player switched
+  off keeps the table unless another player object is active. The minigame makes no rigidbodies (trash cubes are not
+  physics), so the table is unchanged after it. arcade suite (the host uses the machine by its Interactable and
+  places cubes; the client clicks a door while the host plays, the host one after): PASS 9/9 twice;
+  mutants arcade-clear (the old table drop): FAIL, the two bots lost each other while the host played and never finished; arcade-replay (replayed): FAIL 8/9, the minigame opened on the client too.
+- Personal flashlight. FlashlightController on Player/LookHandle/Flashlight; its light ('Flashlight Light Source':
+  spot, range 20, 83 degrees, intensity 19, cookie Cookie01, VolumetricLight, no shadows) is switched on and off by
+  its GameObject. PlayerPose had no bit for it. Now pose flag PoseFlashlight (2; older senders leave it 0) carries
+  IsOn, and the figure gets a copy of this machine's own flashlight light on its head (the head follows the view
+  pitch). flashlight suite (the client switches it on by ToggleFlashlight, turns, switches it off): PASS
+  8/8 (LookAt sets only the pitch here, so the turn is a look down: the light followed, 0 degrees off); mutant flashlight-off (flag never set): FAIL 4/8. Not seen by
+  players yet: how the copied volumetric beam looks from outside.
+- Regression on this build: world2 20/20, doors 17/17, doorsync 4/4, elevator 7/7, bump 7/7. items: PASS in 1 of
+  4 runs (3 of 3 on the commit before). Each fail is one item 5-9 cm apart at the end (items 97 and 123, upstairs at
+  about (1, 5.5, 42), 12 m from both players): the host's physics moves them by itself during the suite, and the
+  client's copy hasn't caught up when the table is dumped. They drift on the commit before too (1.7 cm apart in one
+  run), and nothing changed here runs in that suite, but it is not explained; open.
 
 ### Elevator, furniture lifted by two, merging bags (contributed, 2026-11-02)
 - Elevator (Developers' Hell: ElevatorGameDevParter and ElevatorGameDevCEO; elevatorprobe:

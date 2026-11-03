@@ -10,12 +10,12 @@ public struct PlayerPose
     public float Yaw, Pitch;
     public short HeldItem;   // -1 = nothing; a body is its entity index (items first, then bodies)
     public short Tool;       // equipped tool: game tool id, -1 = none, -2 = power washer lance (ToolNone/ToolLance)
-    public byte Flags;       // PoseUsing: the tool is being used right now
+    public byte Flags;       // PoseUsing: the tool is being used right now; PoseFlashlight: the personal flashlight is on
     public V3 ToolPos;       // the tool's root relative to the player (feet, yaw), as the owner's first-person view holds it
     public Q4 ToolRot;
     public float ToolScale;
     public const short ToolNone = -1, ToolLance = -2;
-    public const byte PoseUsing = 1;
+    public const byte PoseUsing = 1, PoseFlashlight = 2;
 }
 
 public struct ItemSample

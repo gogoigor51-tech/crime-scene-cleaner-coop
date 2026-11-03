@@ -359,6 +359,37 @@ public sealed class PlayerFigure
     }
 
     public Vector3 HandPosition(int s) => hand[s].position;
+    // The personal flashlight (owner's test: nobody saw the others'): a copy of this player's own flashlight light
+    // (Player/LookHandle/Flashlight/Flashlight Light Source: a spot with the game's cookie and volumetric beam), on
+    // the head, which follows the view pitch. Made the first time it is switched on.
+    public Light Flashlight { get; private set; }
+    public void SetFlashlight(bool on, Light template)
+    {
+        if (Flashlight == null)
+        {
+            if (!on) return;
+            GameObject go;
+            if (template != null)
+            {
+                go = Object.Instantiate(template.gameObject, head, false);
+                go.name = "CoopFlashlight";
+            }
+            else
+            {
+                go = new GameObject("CoopFlashlight");
+                go.transform.SetParent(head, false);
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Spot; l.range = 20; l.spotAngle = 83; l.innerSpotAngle = 81; l.intensity = 19;
+                l.color = new Color(0.753f, 0.784f, 0.792f, 1);
+            }
+            go.transform.localPosition = new Vector3(0, 0.06f, 0.12f);
+            go.transform.localRotation = Quaternion.identity;
+            Flashlight = go.GetComponent<Light>();
+            if (Flashlight != null) Flashlight.enabled = true;
+        }
+        if (Flashlight.gameObject.activeSelf != on) Flashlight.gameObject.SetActive(on);
+    }
+
     public void SetActive(bool on) { if (Root.activeSelf != on) Root.SetActive(on); }
     public void Destroy() { if (Root != null) Object.Destroy(Root); }
 }
