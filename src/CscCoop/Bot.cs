@@ -1270,6 +1270,7 @@ public partial class Bot : MonoBehaviour
         return best;
     }
 
+    static Vector3[] lastDump = System.Array.Empty<Vector3>();
     static void Dump(GameWorld w, Session ses, string label)
     {
         string path = Env.Get("CSCCOOP_CSV");
@@ -1284,6 +1285,17 @@ public partial class Bot : MonoBehaviour
             sb.Append(string.Format(ci, "{0},{1},{2:F3},{3:F3},{4:F3},{5},{6},{7}\n", label, i, p.x, p.y, p.z, ses.OwnerOf(i), ses.EpochOf(i), g.IsHeld ? 1 : 0));
         }
         File.AppendAllText(path, sb.ToString());
+        // Items that moved since the last dump by more than 1 cm, with their physics: which item, and what moves it.
+        if (lastDump.Length != w.Items.Count) { lastDump = new Vector3[w.Items.Count]; for (int i = 0; i < w.Items.Count; i++) lastDump[i] = w.Items[i] != null ? w.Items[i].transform.position : Vector3.zero; }
+        for (int i = 0; i < w.Items.Count; i++)
+        {
+            var g = w.Items[i];
+            if (g == null) continue;
+            var p = g.transform.position;
+            if (Vector3.Distance(p, lastDump[i]) > 0.01f)
+                Plugin.L.LogInfo(FormattableString.Invariant($"ITEMTEST moved {label} {i} '{GameWorld.IndexedPathOf(g.transform)}' by {Vector3.Distance(p, lastDump[i]):F3} to {P3(p)} owner {ses.OwnerOf(i)} {w.Describe(i)}"));
+            lastDump[i] = p;
+        }
         Plugin.L.LogInfo($"ITEMTEST dump {label}");
     }
 }

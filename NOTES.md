@@ -533,11 +533,21 @@ victims' bodies" only on the host, a restart only on the host.
   pitch). flashlight suite (the client switches it on by ToggleFlashlight, turns, switches it off): PASS
   8/8 (LookAt sets only the pitch here, so the turn is a look down: the light followed, 0 degrees off); mutant flashlight-off (flag never set): FAIL 4/8. Not seen by
   players yet: how the copied volumetric beam looks from outside.
-- Regression on this build: world2 20/20, doors 17/17, doorsync 4/4, elevator 7/7, bump 7/7. items: PASS in 1 of
-  4 runs (3 of 3 on the commit before). Each fail is one item 5-9 cm apart at the end (items 97 and 123, upstairs at
-  about (1, 5.5, 42), 12 m from both players): the host's physics moves them by itself during the suite, and the
-  client's copy hasn't caught up when the table is dumped. They drift on the commit before too (1.7 cm apart in one
-  run), and nothing changed here runs in that suite, but it is not explained; open.
+- Regression on this build: world2 20/20, doors 17/17, doorsync 4/4, elevator 7/7, bump 7/7. items failed in 3 of
+  7 runs on it and passed 3 of 3 on the commit before; not caused by these changes, see "Items that drift while
+  asleep" below (with that fix: items 4/4).
+
+### Items that drift while asleep (contributed, 2026-11-03)
+- The items suite failed now and then with one item 5-30 cm apart at the end: the stacked crates upstairs in the
+  first job (DA_Enviro Static/Crate, Crate (1), Crate (3); items 123, 97, 114, 12 m from both players). A trace every
+  0.5 s: on the host (their owner) they creep about 4 mm a second, by the game's own physics (Wake only touches other
+  players' items), while Rigidbody.IsSleeping() says asleep, so the host never sent them as moving: only the
+  round-robin refresh (60 a second over ~600 items, so ~10 s) moved the client's copy, which was one refresh behind
+  (seen jumping once at t=9 s). Pass or fail depended on where the refresh cycle fell, on both builds.
+- Now the owner also sends an item that is more than 5 mm or 2 degrees from the state it last sent (Session.Drifted;
+  first sighting just recorded). Core test "creep" (600 items, a crate creeping 4 mm/s asleep, 20% loss): copy within
+  0.6 cm all along; mutant no-drift: 6.3 cm behind, FAIL. items suite 4/4 in a row, final max 2-12 mm (was up to
+  0.30 m); world2 20/20, trash 8/8, bump 7/7. Not checked: how many extra sends a whole job makes (a creeping item goes out about every 1.2 s).
 
 ### Elevator, furniture lifted by two, merging bags (contributed, 2026-11-02)
 - Elevator (Developers' Hell: ElevatorGameDevParter and ElevatorGameDevCEO; elevatorprobe:
