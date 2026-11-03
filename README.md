@@ -48,8 +48,6 @@ untested. [Download the latest release](../../releases/latest). Русская �
 - The walkie-talkie in the Spa job is shared in code but wasn't tested by players.
 - Skipping the intro cutscene can leave the pizza box hanging next to the player in the apartment.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
-- Found on Developers' Hell, not fixed yet: at the **end of a job** the score animations on the report screen play
-  twice, about a second apart.
 
 ## Bug reports (F9)
 
@@ -92,6 +90,4 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 
 **Известные проблемы:** максимум мебели может отличаться (так считает
 сама игра); улучшенный инструмент у друга может выглядеть базовым; рация в Spa и перезапуск заказа вживую не
-проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире. Найдено в
-Developers' Hell, ещё не исправлено: в конце заказа анимации очков на экране отчёта проигрываются дважды, примерно через
-секунду.
+проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире.

@@ -53,6 +53,7 @@ public class Plugin : BasePlugin
         AddComponent<CoopScreen>();
         AddComponent<Reports>();
         Actions.Register(CoopRunner.Instance.World, harmony);
+        if (Env.Get("CSCCOOP_TEST") == "report") Bot.PatchReportCounters(new Harmony(Guid + ".report"));
         if (Env.Get("CSCCOOP_TEST") == "stainprobe") new Harmony(Guid + ".probe").PatchAll(typeof(StainProbePatches));
         if (Env.Get("CSCCOOP_TEST") != "") AddComponent<Bot>();
     }

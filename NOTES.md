@@ -256,9 +256,7 @@ the two copies' saves were at different missions.
   - Elevator, furniture lifted by two at once, merging bags: fixed (see "Elevator, furniture lifted by two, merging
     bags" below).
   - Super Stacker arcade, personal flashlight: fixed (see "Super Stacker arcade, personal flashlight" below).
-  - End of a job: the report's score animations play twice, about a second apart. Not looked into; likely the end of
-    the job reaches the report twice on a machine: once from its own leave and once from the other player's
-    (Ev.Leave -> Jobs.OnLeave), or a replayed call that opens the report.
+  - The report's score animations twice: fixed (see "Leaving a job twice" below).
 
 ## Unknown
 
@@ -512,6 +510,22 @@ victims' bodies" only on the host, a restart only on the host.
   (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
+
+### Leaving a job twice (contributed, 2026-11-03)
+- The owner saw the report's score animations play twice, about a second apart. report suite (tools/run-pair.ps1
+  -Test report; counts and logs every call of MissionLeaveController.LeaveMissionWithReport, DisplayReportAnim,
+  MissionReportDataController.Display/DisplayReport, MissionReportFinalView.Setup/Open, the report pages):
+  - one player leaving (the other follows by the Leave event): every call once on both machines;
+  - both leaving at the same moment (two players at the truck): LeaveMissionWithReport twice on each machine, its own
+    and the other's (Ev.Leave -> Jobs.OnLeave; 0.14 s apart here), then the report's data, Setup, DisplayReport and
+    the job page's animations (AnimateSuccessStatusLabel) all twice. Over Steam, or with the second player a moment
+    later, that is the owner's second or so.
+- Now a machine leaves a job once: Jobs.Leave (prefix on LeaveMissionWithReport) skips a second leave in the same
+  scene (by scene handle; a restarted job is a new scene), its own or another player's. report suite (both leave):
+  PASS 8/8, every call once; mutant leave-twice: 0/8. jobs suite 15/15. The suite's job ends as a failure (0%), so
+  the counting-up numbers themselves weren't seen; the doubled calls are what animated them.
+- Hooking MissionReportPages.Initialize or JobDetailsPage.Initialize breaks the game at start (an NRE in the hook's
+  wrapper, IL2CPP folding); the counters are no-ops until a job is left.
 
 ### Super Stacker arcade, personal flashlight (contributed, 2026-11-03)
 - Super Stacker (arcadeprobe: tools/run-probe.ps1 -Test arcadeprobe -Mission 11). The machine in Developers' Hell

@@ -88,6 +88,7 @@ public partial class Bot : MonoBehaviour
         if (test == "doorprobe" && w != null) { DoorProbe(s, inScene, w); return; }
         if (test == "elevatorprobe" && w != null) { ElevatorProbe(s, inScene, w); return; }
         if (test == "arcadeprobe" && w != null) { ArcadeProbe(s, inScene, w); return; }
+        if (test == "report") ReportWatch();
 
         if (test == "jobs" && w != null) { JobTest(s, inScene, w); }
         if (test == "laptop" && w != null) { LaptopTest(s, inScene, w); return; }
@@ -131,10 +132,11 @@ public partial class Bot : MonoBehaviour
         if (test == "elevator") ElevatorTest(t, ses, w);
         if (test == "arcade") ArcadeTest(t, ses, w);
         if (test == "flashlight") FlashlightTest(t, ses, w);
+        if (test == "report") ReportTest(t, ses, w);
         if (test == "fixlift") FixLiftTest(t, ses, w);
         if (test == "bagmerge") BagMergeTest(t, ses, w);
         if (test == "world2") { try { World2Test(t, ses, w); } catch (Exception e) { Plugin.L.LogError($"WORLD2 bot step {step} failed: {e}"); } }
-        if (test != "jobs" && t > Env.Int("CSCCOOP_QUIT_AFTER", 40))
+        if (test != "jobs" && test != "report" && t > Env.Int("CSCCOOP_QUIT_AFTER", 40))
         {
             Plugin.L.LogInfo("BOT done, quitting");
             BepInEx.Logging.Logger.Listeners.Clear();   // flush by dropping writers below

@@ -232,13 +232,27 @@ public static class Jobs
         finally { WorldEvents.Applying = false; }
     }
 
+    // A job is left once per machine. Two players leaving at about the same moment each got their own leave and the
+    // other's Leave event, so LeaveMissionWithReport ran twice: the leave cutscene, the report's data and its
+    // animations all twice, the second a moment later (owner's test: the score animations played twice, about a
+    // second apart; report suite: every report call twice, 0.14 s apart). The second one, ours or theirs, is skipped.
+    static int leftScene = -1;
+
     [HarmonyPatch(typeof(MissionLeaveController), nameof(MissionLeaveController.LeaveMissionWithReport))]
     [HarmonyPrefix]
-    static void Leave()
+    static bool Leave()
     {
-        if (!WorldEvents.Live) return;   // also false while applying someone else's leave
+        int scene = SceneManager.GetActiveScene().handle;
+        if (scene == leftScene && Env.Get("CSCCOOP_MUTANT") != "leave-twice")
+        {
+            Plugin.L.LogInfo($"COOP already leaving this job: a second leave{(WorldEvents.Applying ? " from another player" : "")} skipped");
+            return false;
+        }
+        leftScene = scene;
+        if (!WorldEvents.Live) return true;   // also false while applying someone else's leave
         Plugin.L.LogInfo("COOP leaving the job: everyone leaves");
         WorldEvents.Send(Ev.Leave, w => w.Write((byte)0));   // sent before the scene starts to end
+        return true;
     }
 
     public static void OnLeave()
