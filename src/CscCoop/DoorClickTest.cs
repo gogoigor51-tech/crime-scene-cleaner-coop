@@ -63,12 +63,14 @@ public partial class Bot
                 step = 2; break;
             case 2 when t > 10:
                 DoorClickLog("after host");
+                step = 3; break;   // a step of its own: the client's clicks must not race the host's dump
+            case 3 when t > 11:
                 if (!host && dcDoors.Length > 2) { ClickReal(w, dcDoors[1], "client"); ClickReal(w, dcDoors[2], "client"); }
-                step = 3; break;
-            case 3 when t > 15:
+                step = 4; break;
+            case 4 when t > 16:
                 DoorClickLog("after client");
                 Plugin.L.LogInfo("DOORCLICK dump done");
-                step = 4; break;
+                step = 5; break;
         }
     }
 }

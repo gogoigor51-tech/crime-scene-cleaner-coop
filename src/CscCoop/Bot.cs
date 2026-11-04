@@ -135,6 +135,9 @@ public partial class Bot : MonoBehaviour
         if (test == "doorclick") DoorClickTest(t, ses, w);
         if (test == "placed") PlacedTest(t, ses, w);
         if (test == "washer") WasherTest(t, ses, w);
+        if (test == "stackreward") StackRewardTest(t, ses, w);
+        if (test == "mails") MailsTest(t, ses, w);
+        if (test == "vanrace") VanRaceTest(t, ses, w);
         if (test == "report") ReportTest(t, ses, w);
         if (test == "fixlift") FixLiftTest(t, ses, w);
         if (test == "bagmerge") BagMergeTest(t, ses, w);

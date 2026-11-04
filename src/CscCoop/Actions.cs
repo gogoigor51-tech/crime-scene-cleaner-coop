@@ -72,6 +72,12 @@ public static class Actions
         // counts only bodies added): found by one player, the other's van collect of it didn't count (bodies
         // suite: the host 2, the client 1 for one body each).
         "BodyQuest.AddBodyToQuest",
+        // Owner's test of 0.4.3-test on Developers' Hell. The Super Stacker reward (the passage behind the shelf at
+        // 50 000 points): EventOnScoreReach.CheckScore(score) is called by the minigame on leaving it, on the
+        // player who played only, since the minigame is each player's own; replayed with the score, the passage
+        // opens for everyone. Deleting a mail on an office computer (InspectableMail.DeleteMail: once per mail,
+        // it clears its own flag; DeleteMailQuest counts it): the mail UI is personal, the delete is shared.
+        "EventOnScoreReach.CheckScore", "InspectableMail.DeleteMail",
     };
     static readonly HashSet<string> Skip = new() { "OpenUIPanelOnInteract", "BarmanInteraction", "MusicDisc", "UVLampController" };
 
@@ -97,6 +103,8 @@ public static class Actions
         var tables = new Dictionary<Type, Act>();
         var entries = new List<string>(Whitelist);
         if (Env.Get("CSCCOOP_MUTANT") == "door-old") entries.Add("ShortcutDoors.Toggle");   // the 0.4.2 rule
+        if (Env.Get("CSCCOOP_MUTANT") == "stack-local") entries.Remove("EventOnScoreReach.CheckScore");
+        if (Env.Get("CSCCOOP_MUTANT") == "mail-local") entries.Remove("InspectableMail.DeleteMail");
         foreach (var entry in entries)
         {
             var dot = entry.IndexOf('.');

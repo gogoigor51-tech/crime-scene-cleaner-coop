@@ -262,11 +262,8 @@ the two copies' saves were at different missions.
   First suspects, not reproduced yet:
   - Doors, items put on their spot, another player's power washer: fixed (see "Real door clicks, placed items,
     another player's washer" below).
-  - Super Stacker reward (secret passage behind the shelf at 50 000 points): EventOnScoreReach.CheckScore invokes
-    a UnityEvent on the scoring player's machine only, since the minigame is personal now. Share it.
-  - Deleting mails (InspectableMail.DeleteMail -> DeleteMailQuest) isn't shared.
-  - Bodies into the van: the disposal animation sometimes twice (counted once): both machines likely see the body
-    land in the van at about the same moment.
+  - Super Stacker reward, deleting mails, the van animation twice: fixed (see "Super Stacker reward, mails, the van
+    animation" below).
 
 ## Unknown
 
@@ -520,6 +517,30 @@ victims' bodies" only on the host, a restart only on the host.
   (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
+
+### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
+- Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's
+  StackMiniGamePresenter.HighscoreOnLeave: CheckScore(score) invokes OnScoreReach at the required score, which turns
+  the shelf (CubePivot, CabinetDisplay...: 90 -> 180 degrees, the passage). The minigame is each player's own now, so
+  this ran on the scorer only. CheckScore is a replayed action now (int argument). stackreward suite (the host leaves
+  the minigame by HighscoreOnLeave with the required score + 100; the reward's objects compared on both): 5/5;
+  mutant stack-local: the shelf turned on the host only.
+- Mails on the office computers (InspectableMail; DeleteMailQuest counts each mail its quest wants deleted).
+  DeleteMail plays a sound, fires OnMailDelete (the quest count) and OnMailDeleted once, guarded by a flag it clears.
+  The mail UI is personal, so nothing was shared; DeleteMail is a replayed action now. mails suite (the host deletes
+  two of the mails the quests want): 4/4, the same mails and counts on the client; mutant mail-local: unchanged there.
+- The van animation twice. The trunk's trigger starts TrunkController.SacaleAndDestroyItem for an item in it (it
+  swells and shrinks, then TryShowProp, the effect, CollectAndDestroy), on every machine the item lands in the trunk
+  on, the other player's copy included. The machine that finished first sent its collect; on the other, OnCollect
+  showed the prop, and its own sequence showed it again a moment later (the body counted once, by the collect guard).
+  Now TryShowProp runs once per item. vanrace suite (both machines run the sequence for the same body, the client
+  0.5 s later; the bots start SacaleAndDestroyItem, as the trigger only does for an item inside it): 4/4, the prop
+  shown once on each; mutant van-twice: twice on the client.
+- Runs with these changes: vanrace 4/4, trash 8/8, world2 20/20, items 8/8, doors 17/17, arcade 9/9, doorclick 5/5
+  (its first run raced: the client's clicks and the host's dump were one step; split since). bodies: 11/13, 12/13
+  (the shelf case), 13/13. The 11/13 run also had the victims objective at 2 on the host and 1 on the client: the
+  host's van body, collected on the client by the event, wasn't counted there (the event's AddBodyToQuest path); not
+  seen in the two runs after, and not touched by these changes (the van change only skips a second prop). Open.
 
 ### Real door clicks, placed items, another player's washer (contributed, 2026-11-04)
 - Doors (owner: open on the host, closed on the client). doorclick suite (run-pair -Test doorclick -Mission 11):

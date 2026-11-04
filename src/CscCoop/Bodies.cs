@@ -220,7 +220,7 @@ public static class Bodies
     // (BodyQuest.wasCollected is no guard: the bodies suite then counted the second victim on neither machine.)
     // So the same van item is collected once: a second CollectAndDestroy of it does nothing.
     static readonly HashSet<System.IntPtr> collectedOnce = new();
-    public static void OnScene() => collectedOnce.Clear();
+    public static void OnScene() { collectedOnce.Clear(); propShown.Clear(); }
 
     [HarmonyPatch(typeof(GarbageItem), nameof(GarbageItem.CollectAndDestroy))]
     [HarmonyPrefix]
@@ -240,6 +240,26 @@ public static class Bodies
         if (i < 0) { Dyn.OnCollected(__instance); return; }   // a bag made during the job
         Plugin.L.LogInfo($"COOP van item {i} ({__instance.name}) collected");
         WorldEvents.Send(Ev.VanCollect, w => w.Write((ushort)i), 0x20000u + (uint)i);
+    }
+
+    // The van's own sequence for an item (trunk trigger -> SacaleAndDestroyItem: the item swells and shrinks, then
+    // TryShowProp, the effect and CollectAndDestroy) runs on every machine the item lands in the trunk on, the
+    // other player's copy included. When one machine finished first, its collect reached the other mid-sequence:
+    // OnCollect showed the prop there, and the local sequence showed it again with its effect a moment later
+    // (owner's test of 0.4.3-test: the disposal animation sometimes twice, the body counted once). The prop is shown
+    // once per item. (The effect on the item comes only from the sequence, so it plays once per machine already.)
+    static readonly HashSet<System.IntPtr> propShown = new();
+    public static int PropsShown, PropsSkipped;
+    static bool VanOnce => Env.Get("CSCCOOP_MUTANT") != "van-twice";
+
+    [HarmonyPatch(typeof(TrunkController), nameof(TrunkController.TryShowProp))] [HarmonyPrefix]
+    static bool ShowPropOnce(GarbageItem item)
+    {
+        if (item == null) return true;
+        if (propShown.Add(item.Pointer) || !VanOnce) { PropsShown++; return true; }
+        PropsSkipped++;
+        Plugin.L.LogInfo($"COOP van prop for {item.name} already shown: skipped");
+        return false;
     }
 
     public static void OnCollect(BinaryReader r)
