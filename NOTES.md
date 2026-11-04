@@ -257,6 +257,22 @@ the two copies' saves were at different missions.
     bags" below).
   - Super Stacker arcade, personal flashlight: fixed (see "Super Stacker arcade, personal flashlight" below).
   - The report's score animations twice: fixed (see "Leaving a job twice" below).
+- Open, from the owner's two-player test of the 0.4.3-test zip on Developers' Hell (2026-11-04). Fixed there: the
+  physics near the action, others' buckets and lamps, products, lamps, elevator, furniture lifted by two, bags.
+  First suspects, not reproduced yet:
+  - Doors: open on the host, closed on the client. The doorsync suite toggles doors with ShortcutDoors.Toggle
+    directly; a real click (Interact -> TryOpen the first time / OnOpen -> Toggle) may not reach the patched
+    methods (inlined, or another path). Next: a probe with the real click, the suite on that path.
+  - Items put in place (FixableObject/furniture spots) by the client stay physical: likely the remote/local
+    handover restores Remote.WasKinematic from before the placement, or the placement never freezes the copy on the
+    other machine, and LocalPhysics then runs it.
+  - Another player's power washer: its lance can be equipped (another path than PowerWasherStation.PickUp, which
+    is limited to the owner), and the water only drains on the owner's machine: endless water.
+  - Super Stacker reward (secret passage behind the shelf at 50 000 points): EventOnScoreReach.CheckScore invokes
+    a UnityEvent on the scoring player's machine only, since the minigame is personal now. Share it.
+  - Deleting mails (InspectableMail.DeleteMail -> DeleteMailQuest) isn't shared.
+  - Bodies into the van: the disposal animation sometimes twice (counted once): both machines likely see the body
+    land in the van at about the same moment.
 
 ## Unknown
 
