@@ -260,14 +260,8 @@ the two copies' saves were at different missions.
 - Open, from the owner's two-player test of the 0.4.3-test zip on Developers' Hell (2026-11-04). Fixed there: the
   physics near the action, others' buckets and lamps, products, lamps, elevator, furniture lifted by two, bags.
   First suspects, not reproduced yet:
-  - Doors: open on the host, closed on the client. The doorsync suite toggles doors with ShortcutDoors.Toggle
-    directly; a real click (Interact -> TryOpen the first time / OnOpen -> Toggle) may not reach the patched
-    methods (inlined, or another path). Next: a probe with the real click, the suite on that path.
-  - Items put in place (FixableObject/furniture spots) by the client stay physical: likely the remote/local
-    handover restores Remote.WasKinematic from before the placement, or the placement never freezes the copy on the
-    other machine, and LocalPhysics then runs it.
-  - Another player's power washer: its lance can be equipped (another path than PowerWasherStation.PickUp, which
-    is limited to the owner), and the water only drains on the owner's machine: endless water.
+  - Doors, items put on their spot, another player's power washer: fixed (see "Real door clicks, placed items,
+    another player's washer" below).
   - Super Stacker reward (secret passage behind the shelf at 50 000 points): EventOnScoreReach.CheckScore invokes
     a UnityEvent on the scoring player's machine only, since the minigame is personal now. Share it.
   - Deleting mails (InspectableMail.DeleteMail -> DeleteMailQuest) isn't shared.
@@ -526,6 +520,37 @@ victims' bodies" only on the host, a restart only on the host.
   (InventoryController.Equip(bucket, 0), then lets go), the client grabs and carries it 0.9 m; same spot on both; the
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
+
+### Real door clicks, placed items, another player's washer (contributed, 2026-11-04)
+- Doors (owner: open on the host, closed on the client). doorclick suite (run-pair -Test doorclick -Mission 11):
+  doors used by ShortcutDoors.Interact, the player's click, with the door leaves' rotation and position logged on
+  both. A click goes Interact -> TryOpen -> OnOpen -> Toggle. Doors sent the state after Toggle (right), but
+  ShortcutDoors.TryOpen was also a replayed action: on the other machine the state came first, then the replayed
+  TryOpen toggled the door back. Every real click ended the other way there (reproduced: 3 of 5 checks). The
+  doorsync suite called Toggle directly and never went through TryOpen. Now TryOpen is replayed only for a locked
+  door (the rattle; a key that unlocks it is shared as before). doorclick 5/5; mutant door-tryopen 3/5.
+- Items put on their spot (FurnitureHologram; the "put the furniture back" objective). FixableFurniture.Fix makes
+  the rigidbody kinematic there. The mod saved the kinematic state when another player took an item over and put it
+  back when the item came back (and when near-player physics woke it): for an item the client placed, that was the
+  state from before the placement, so on the host it came back dynamic, and a push or a settle moved it off its
+  spot. Now an item put on its spot during the job (a FixableFurniture.Fix after the table is built, ours or
+  replayed, while IsFixed) is kinematic whoever has it and never gets local physics; the saved state is the one
+  without the placement. Pieces the game stores on their spot when the job loads are fixed too but stay dynamic
+  (their own setup runs after that Fix): a first version that froze every IsFixed piece failed the bump suite (a bar
+  chair on its spot no longer knocked over). placed suite (the client lines a piece up with its hologram and
+  releases it the game's way; it goes back to the host; the host pushes it): 6/6, kinematic and 0.0 m off on both;
+  mutant placed-physics: dynamic on the host, pushed 5 cm off its spot. bump 7/7.
+- Another player's power washer. A click on a station (PowerWasherStation.Interact) hands out its lance:
+  EquipLance -> AddWasherToInventory, Equip; with perk 46 (backpack washer) it puts the whole station on the back
+  instead. On a copy of another player's station that gave this player a lance whose water came from the copy,
+  which keeps getting its owner's level: water without end. PickUp was already limited to the station's owner; now
+  Interact and EquipLance are too. washer suite (both bots add the Basic Station and Basic Lance to their test
+  copies, the client holds its mop and clicks the host's station, then its own): 7/7, the click on the host's
+  station stops before EquipLance and its own goes through; mutant washer-lance: EquipLance ran on the host's
+  station. Tools added mid-job skip the station's own setup, so the bots' lance handout itself fails
+  (AddWasherToInventory instantiates null): the suite checks where the click gets to, not a lance in the hand.
+- Runs with these changes: doors 17/17, doorsync 4/4, world2 20/20, items 8/8, toolcarry 7/7, products 6/6, bump 7/7,
+  trash 8/8, fixlift 5/5, elevator 7/7, core tests 82/82.
 
 ### Leaving a job twice (contributed, 2026-11-03)
 - The owner saw the report's score animations play twice, about a second apart. report suite (tools/run-pair.ps1

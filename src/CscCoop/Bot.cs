@@ -132,6 +132,9 @@ public partial class Bot : MonoBehaviour
         if (test == "elevator") ElevatorTest(t, ses, w);
         if (test == "arcade") ArcadeTest(t, ses, w);
         if (test == "flashlight") FlashlightTest(t, ses, w);
+        if (test == "doorclick") DoorClickTest(t, ses, w);
+        if (test == "placed") PlacedTest(t, ses, w);
+        if (test == "washer") WasherTest(t, ses, w);
         if (test == "report") ReportTest(t, ses, w);
         if (test == "fixlift") FixLiftTest(t, ses, w);
         if (test == "bagmerge") BagMergeTest(t, ses, w);

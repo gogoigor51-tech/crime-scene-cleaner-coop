@@ -25,7 +25,10 @@ public static class Actions
         // through OpenDoors (ISIL; owner's manual test). Interact itself is not replayed: it checks the clicking
         // player's side of the door, which the other player may not be on. Toggle is not here any more: replayed
         // as a toggle, any missed or doubled event left the door inverted for good (owner's test on Developers'
-        // Hell); Doors shares the open/closed state after every door path instead. TryOpen only rattles.
+        // Hell); Doors shares the open/closed state after every door path instead.
+        // TryOpen is a real click's entry (Interact -> TryOpen -> OnOpen -> Toggle): replayed, it toggled the door
+        // again on top of the shared state, so every click ended the other way on the other machine (owner's test of
+        // 0.4.3-test, doorclick suite). Replayed only for a locked door, where it is the rattle (NotARattle).
         "ShortcutDoors.TryOpen",
         "LabLiftLever.Interact", "LabSecretLiftController.Interact", "LabLiftController.ChangeLiftPosition",
         "ExtendableLadder.Interact", "ElectrickShockBox.Interact", "ElectricShockLeaver.Interact",
@@ -163,6 +166,14 @@ public static class Actions
         return ui;
     }
 
+    // A door's TryOpen is shared only while the door is locked (the rattle); an open/close is Doors' state event.
+    static bool NotARattle(Component c)
+    {
+        if (Env.Get("CSCCOOP_MUTANT") == "door-tryopen") return false;
+        var d = c.TryCast<ShortcutDoors>();
+        return d != null && !d.IsLocked;
+    }
+
     // Test probes: the index of an object in the first action table that has it (-1 if none).
     public static int IndexOfAny(Component c) { foreach (var a in acts) { int i = a.IndexOf(c); if (i >= 0) return i; } return -1; }
 
@@ -175,7 +186,7 @@ public static class Actions
         if (byMethod.TryGetValue(__originalMethod, out var a0) && CastTo(c, a0.Type) == null) return;   // a folded call on another type
         if (Skip.Contains(c.GetIl2CppType().Name)) return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("Hub")) return;   // each player's own apartment
-        if (InTool(c) || OpensPanel(c)) return;
+        if (InTool(c) || OpensPanel(c) || NotARattle(c)) return;
         if (!byMethod.TryGetValue(__originalMethod, out var act)) return;
         int i = act.IndexOf(c);
         if (i < 0) return;
@@ -203,7 +214,7 @@ public static class Actions
         if ((uint)id >= (uint)acts.Count) return;
         var act = acts[id];
         var target = act.Get(i);
-        if (target == null || InTool(target)) return;
+        if (target == null || InTool(target) || NotARattle(target)) return;
         Plugin.L.LogInfo($"COOP action {act.Name} on {act.Type.Name} {i} from another player");
         var typed = CastTo(target, act.Type);
         if (typed == null) return;

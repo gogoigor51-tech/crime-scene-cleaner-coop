@@ -359,6 +359,29 @@ public static class Dyn
     [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.PickUp))] [HarmonyPrefix]
     static bool WasherPickUp(PowerWasherStation __instance) => __instance.TryCast<PowerWasherStation>() == null || ToolPickUp(__instance);
 
+    // Taking the lance out of a power washer station (a click on it: Interact -> EquipLance, AddWasherToInventory)
+    // puts that station's lance in the clicking player's inventory, and the water it sprays is taken from a station
+    // that is a copy here and gets its owner's water level all the time: another player's washer sprayed without end
+    // (owner's test of 0.4.3-test). Same rule as picking it up: only the player it belongs to takes its lance.
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.Interact))] [HarmonyPrefix]
+    static bool WasherInteract(PowerWasherStation __instance) => LanceAllowed(__instance, "Interact");
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.EquipLance))] [HarmonyPrefix]
+    static bool WasherEquipLance(PowerWasherStation __instance) => LanceAllowed(__instance, "EquipLance");
+
+    static bool LanceAllowed(PowerWasherStation st, string how)
+    {
+        if (st == null || st.TryCast<PowerWasherStation>() == null || WorldEvents.Applying) return true;
+        var s = S;
+        if (s == null || !s.Synced || !byGo.TryGetValue(st.gameObject.Pointer, out var o) || o.Kind != Kind.Tool) return true;
+        byte me = s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
+        if (BelongsTo(o) == me) { LanceOwn++; return true; }
+        if (Env.Get("CSCCOOP_MUTANT") == "washer-lance") { LanceOthers++; Plugin.L.LogInfo($"COOP {how} on player {BelongsTo(o)}'s power washer let through (mutant)"); return true; }
+        Plugin.L.LogInfo($"COOP {how} on player {BelongsTo(o)}'s power washer refused: its lance isn't ours");
+        LanceRefused++;
+        return false;
+    }
+    public static int LanceRefused, LanceOwn, LanceOthers;   // tests: clicks on washers refused, on our own, let through on others'
+
     [HarmonyPatch(typeof(PortableItem), nameof(PortableItem.PickUp))] [HarmonyPrefix]
     static bool ToolPickUp(PortableItem __instance)
     {

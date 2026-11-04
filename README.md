@@ -49,10 +49,6 @@ untested. [Download the latest release](../../releases/latest). Русская �
 - Skipping the intro cutscene can leave the pizza box hanging next to the player in the apartment.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
 - Found in a two-player test of the 0.4.3 test build on Developers' Hell, not fixed yet:
-  - **Doors:** a door opened on the host can show as closed on the other player's screen.
-  - **Items put in place** by the client stay movable: they can be knocked out of place or fall by themselves
-    (normally the game fixes a placed item where it is).
-  - **Power washer:** a player can take another player's power washer lance and spray without the water running out.
   - **Super Stacker:** the secret passage behind the shelf that opens at 50 000 points opens only for the player
     who scored.
   - **Deleting emails** on the office computer isn't shared.
@@ -100,8 +96,6 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 **Известные проблемы:** максимум мебели может отличаться (так считает
 сама игра); улучшенный инструмент у друга может выглядеть базовым; рация в Spa и перезапуск заказа вживую не
 проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире. Найдено в тесте сборки 0.4.3
-вдвоём в Developers' Hell, ещё не исправлено: открытая у хоста дверь может быть закрыта у друга; предмет,
-поставленный клиентом на место, не закрепляется (его можно сдвинуть, он может упасть); можно взять чужую мойку и
-мыть без конца воды; тайный проход за полкой, который открывается за 50 000 очков в Super Stacker, открывается
+вдвоём в Developers' Hell, ещё не исправлено: тайный проход за полкой, который открывается за 50 000 очков в Super Stacker, открывается
 только у набравшего; удаление писем на компьютере в офисе не общее; анимация погрузки тела в фургон иногда
 проигрывается дважды (тело засчитывается один раз).

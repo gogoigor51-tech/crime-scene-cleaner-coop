@@ -65,7 +65,7 @@ public sealed class GameWorld : IWorld
 
     void Clear()
     {
-        key = 0; Items.Clear(); indexOf.Clear(); remote = Array.Empty<Remote>();
+        key = 0; Items.Clear(); indexOf.Clear(); remote = Array.Empty<Remote>(); pieces = Array.Empty<FixableFurniture>(); placedNow.Clear();
         lastPos = Array.Empty<Vector3>(); movedAt = Array.Empty<float>();
         Taints.Clear(); taintIndex.Clear(); Bodies.Clear(); bodyIndex.Clear(); Garbage.Clear(); garbageIndex.Clear();
         foreach (var t in tables) t.Clear();
@@ -100,6 +100,7 @@ public sealed class GameWorld : IWorld
         rows.Sort((a, b) => string.CompareOrdinal(a.k, b.k));
         uint h = Fnv(scene, 2166136261);
         foreach (var (k, g) in rows) { indexOf[g.Pointer] = Items.Count; Items.Add(g); h = Fnv(k, h); }
+        pieces = Items.ConvertAll(g => g.GetComponent<FixableFurniture>()).ToArray();
         if (DumpPath != "") System.IO.File.AppendAllLines(DumpPath, rows.ConvertAll(r => "Item " + r.k + (r.g.GetComponent<PortableItem>() != null ? " [portable]" : "")));
         // The scene key is the entity space (items and bodies), which positions and ownership are indexed by. Every
         // other table gets a fingerprint of its own, compared with the other players' (TableCheck): one that
@@ -370,7 +371,7 @@ public sealed class GameWorld : IWorld
         {
             r.On = true; r.Fresh = false; r.Local = false; r.StillSince = Time.unscaledTime;
             r.Pos = g.transform.position; r.Rot = g.transform.rotation;
-            if (rb != null) { r.WasKinematic = rb.isKinematic; rb.isKinematic = true; }
+            if (rb != null) { r.WasKinematic = rb.isKinematic && !Placed(i); rb.isKinematic = true; }
         }
         else if (local && r.On && r.Local)
         {
@@ -385,7 +386,7 @@ public sealed class GameWorld : IWorld
             if (r.Fresh) Snap(i);
             if (rb != null)
             {
-                rb.isKinematic = r.WasKinematic;
+                rb.isKinematic = r.WasKinematic || Placed(i);
                 if (!rb.isKinematic) { rb.velocity = r.Vel; rb.WakeUp(); }
             }
         }
@@ -534,7 +535,7 @@ public sealed class GameWorld : IWorld
         var rb = g != null ? g.Rb : null;
         bool rest = r.Fresh && !r.Held && r.Vel.sqrMagnitude < 0.01f && now - r.StillSince >= RestAfter;
         bool near = now < r.AwakeUntil || (r.Local && !StillFor(i));
-        if (rb == null || !rest || !near || g.IsHeld) { r.Local = false; return false; }
+        if (rb == null || !rest || !near || g.IsHeld || Placed(i)) { r.Local = false; return false; }
         var t = g.transform;
         if (!r.Local)
         {
@@ -592,7 +593,32 @@ public sealed class GameWorld : IWorld
     {
         var rb = (uint)i < (uint)Items.Count && Items[i] != null ? Items[i].Rb : null;
         if (rb == null) return true;
-        return (uint)i < (uint)remote.Length && remote[i].On ? remote[i].WasKinematic : rb.isKinematic;
+        return (uint)i < (uint)remote.Length && remote[i].On ? remote[i].WasKinematic || Placed(i) : rb.isKinematic;
+    }
+
+    // An item a player put on its spot during the job (FixableFurniture.Fix: the game makes it kinematic there, so it
+    // stays put). The kinematic state saved before another player took the item over was put back over that: an item
+    // the client had placed came out dynamic on the host once it rested, could be knocked off its spot or fall by
+    // itself (owner's test of 0.4.3-test). Such an item is kinematic whoever has it, and never gets local physics.
+    // Pieces the game stores on their spot when the job loads are fixed too but stay dynamic (the item's own setup
+    // runs after that Fix; bump suite: a bar chair on its spot is knocked over by a thrown one), so only a Fix after
+    // the table is built counts (PlacedNow), until the piece leaves its spot (IsFixed false).
+    FixableFurniture[] pieces = Array.Empty<FixableFurniture>();
+    readonly HashSet<int> placedNow = new();
+    static readonly bool placedPhysics = Env.Get("CSCCOOP_MUTANT") == "placed-physics";
+    public bool Placed(int i)
+    {
+        if (placedPhysics || !placedNow.Contains(i)) return false;
+        if ((uint)i < (uint)pieces.Length && pieces[i] != null && pieces[i].IsFixed) return true;
+        placedNow.Remove(i);   // taken off its spot
+        return false;
+    }
+
+    public void PlacedNow(FixableFurniture f)
+    {
+        if (key == 0 || f == null) return;
+        int i = IndexOf(f.GrabController);
+        if (i >= 0) placedNow.Add(i);
     }
 
     public bool IsRemoteDriven(int i) => (uint)i < (uint)remote.Length && remote[i].On;
