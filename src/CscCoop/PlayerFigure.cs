@@ -21,6 +21,10 @@ public sealed class PlayerFigure
     readonly Transform[] thigh = new Transform[2], shin = new Transform[2], foot = new Transform[2];
     readonly Vector3 hipsBind;
     public readonly ToolLook Tool;
+    // A skin: one of the game's people posed from this figure's bones, which then only drive it (SkinModel).
+    public SkinModel Skin { get; private set; }
+    readonly SkinnedMeshRenderer own;
+    Transform[] Bones => new[] { hips, spine, chest, neck, head, upperArm[0], upperArm[1], foreArm[0], foreArm[1], hand[0], hand[1], thigh[0], thigh[1], shin[0], shin[1], foot[0], foot[1] };
     public readonly int Vertices;
     Vector3 lastPos;
     float phase, speed, useTime;
@@ -59,7 +63,7 @@ public sealed class PlayerFigure
 
         var bones = new[] { hips, spine, chest, neck, head, upperArm[0], foreArm[0], hand[0], upperArm[1], foreArm[1], hand[1], thigh[0], shin[0], foot[0], thigh[1], shin[1], foot[1] };
         var mesh = BuildMesh(bones, out Vertices);
-        var smr = Root.AddComponent<SkinnedMeshRenderer>();
+        var smr = own = Root.AddComponent<SkinnedMeshRenderer>();
         smr.sharedMesh = mesh;
         smr.bones = bones;
         smr.rootBone = hips;
@@ -333,6 +337,7 @@ public sealed class PlayerFigure
             // Long tools take the other hand further along the shaft.
             if (Tool.Length > 0.7f) Reach(0, pos + (Tool.Centre - pos).normalized * Mathf.Min(0.4f, Tool.Length * 0.35f), -up * 0.5f - rt * 0.8f - f * 0.3f);
         }
+        Skin?.Apply(Root.transform, Bones, hipsBind);
     }
 
     // Two-bone IK: the hand's grip (a little past the wrist) to target, the elbow bent toward pole.
@@ -388,6 +393,14 @@ public sealed class PlayerFigure
             if (Flashlight != null) Flashlight.enabled = true;
         }
         if (Flashlight.gameObject.activeSelf != on) Flashlight.gameObject.SetActive(on);
+    }
+
+    public void SetSkin(SkinModel skin)
+    {
+        if (Skin != null && Skin != skin) Skin.Destroy();
+        Skin = skin;
+        own.enabled = skin == null;
+        if (skin != null) skin.Apply(Root.transform, Bones, hipsBind);
     }
 
     public void SetActive(bool on) { if (Root.activeSelf != on) Root.SetActive(on); }

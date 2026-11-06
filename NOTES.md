@@ -518,6 +518,21 @@ victims' bodies" only on the host, a restart only on the host.
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
 
+### Skins: the game's people as player models (in progress, 2026-11-06)
+- No player model is loaded in a job (see "model probe"): the only full human models are the bodies. Their names in
+  the scene files (level*, sharedassets*): about 115 characters across all jobs, almost all Character Creator rigs
+  (bones CC_Base_*). They are in the scenes' own asset files only: not in resources.assets and not in the
+  Addressables bundles (no CC_Base_Hip in either), so Unity can't load one body by itself at runtime.
+- SkinModel: a copy of a body's Animator object under an inactive parent (no Awake/OnEnable of its scripts), stripped
+  to transforms and renderers, bones put in bind pose from the meshes' bindposes; every frame it follows the
+  PlayerFigure's bones through the humanoid map (Animator.GetBoneTransform): torso, neck and head copy the figure's
+  turn, arms and legs follow the figure's limb directions (bodies bind in a T pose, the figure in an A pose), hands
+  and feet keep their bind pose on the limb. The figure's own mesh is hidden; its bones still place the tool.
+- skinprobe (run-probe -Test skinprobe, first job): the 3 bodies (Girl02 Anim, DrugDealerAnim Variant, Girl01
+  Ragdoll) are humanoids, 6-9 skinned meshes each (body, eyes, clothes, hair; URP Lit, one Lux URP hair shader), all 17
+  bones mapped; three skinned figures walking, carrying and looking up/down render textured and posed (screenshots).
+  Not done yet: the skin choice, sending it to the others, loading bodies of other jobs.
+
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's
   StackMiniGamePresenter.HighscoreOnLeave: CheckScore(score) invokes OnScoreReach at the required score, which turns

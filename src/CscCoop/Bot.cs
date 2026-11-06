@@ -88,6 +88,7 @@ public partial class Bot : MonoBehaviour
         if (test == "doorprobe" && w != null) { DoorProbe(s, inScene, w); return; }
         if (test == "elevatorprobe" && w != null) { ElevatorProbe(s, inScene, w); return; }
         if (test == "arcadeprobe" && w != null) { ArcadeProbe(s, inScene, w); return; }
+        if (test == "skinprobe" && w != null) { SkinProbe.Tick(w); return; }
         if (test == "report") ReportWatch();
 
         if (test == "jobs" && w != null) { JobTest(s, inScene, w); }
