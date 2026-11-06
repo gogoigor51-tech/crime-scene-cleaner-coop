@@ -58,11 +58,11 @@ static class SkinProbe
                 foreach (var fg in figs) fg.Destroy();
                 figs.Clear();
                 var set = new Skins.AssetSet(Skins.SkinFiles.DataDir);
-                var people = new List<Skins.SkinFiles.Person>();
+                var people = new List<Skins.Person>();
                 foreach (var lv in files.Split(','))
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var found = Skins.SkinFiles.FindPeople(set, lv);
+                    var found = Skins.PersonReader.FindPeople(set, lv);
                     Plugin.L.LogInfo($"SKINPROBE {lv}: {found.Count} people in {sw.ElapsedMilliseconds} ms: {string.Join(", ", found.ConvertAll(x => $"{x.Name}({x.Meshes})"))}");
                     people.AddRange(found.GetRange(0, Math.Min(found.Count, lv == files.Split(',')[0] ? 1 : 2)));
                 }

@@ -10,5 +10,6 @@
   <ItemGroup>
     <Compile Include="../../src/CscCoop/Skins/AssetFile.cs" />
     <Compile Include="../../src/CscCoop/Skins/AssetObjects.cs" />
+    <Compile Include="../../src/CscCoop/Skins/PersonReader.cs" />
   </ItemGroup>
 </Project>

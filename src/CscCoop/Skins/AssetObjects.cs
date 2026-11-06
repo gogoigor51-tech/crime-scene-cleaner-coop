@@ -202,9 +202,15 @@ public sealed class AssetSet
     public AssetFile Get(string name)
     {
         name = Path.GetFileName(name);
-        if (!files.TryGetValue(name, out var f)) files[name] = f = new AssetFile(Path.Combine(dataDir, name));
-        return f;
+        lock (files)
+        {
+            if (!files.TryGetValue(name, out var f)) files[name] = f = new AssetFile(Path.Combine(dataDir, name));
+            return f;
+        }
     }
+
+    // Lets go of the open files (a person read, the catalog scanned).
+    public void Close() { lock (files) { foreach (var f in files.Values) f.Close(); files.Clear(); } }
 
     // The file a PPtr points into: 0 = the same file, n = its n-th external. Null for the engine's built-in files.
     public AssetFile Resolve(AssetFile from, PPtr p)

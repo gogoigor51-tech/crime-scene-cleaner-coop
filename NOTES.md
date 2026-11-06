@@ -545,7 +545,20 @@ victims' bodies" only on the host, a restart only on the host.
 - skinprobe with CSCCOOP_SKIN_FILES=level6: in the first job, the Smart House son and mother built from level6 in
   140-200 ms (7-9 meshes), textured and posed. Scene file numbers don't follow the build list one to one (level6
   holds the Smart House people); level38 had none.
-  Not done yet: the catalog of all people, loading in the background, the Skins menu, sending the skin to the others.
+- Catalog (Skins/SkinLoader.cs SkinCatalog, PersonReader.Catalog): every scene file scanned for people, merged by the
+  meshes and materials they wear (the same person in a job, its Nightmare version and its intro): 142 people in 1.1 s
+  (offline and in game), kept in BepInEx/config/CscCoop-skins.tsv with the scene files' sizes (read from there on the
+  next start). Names: the root's name cleaned ("Pref_SC_Mother" -> "SC Mother"); Act II roots are mostly
+  "RagdollBase", named by the body's material instead ("Guest_Geralt_Body" -> "Guest Geralt"). A few names repeat
+  where the game has a bloodier variant of a person.
+- Loader (SkinLoader): one person at a time; the files read and decoded on a worker thread (PersonReader uses no Unity
+  types: IL2CPP calls from a non-Unity thread aren't safe), the Unity objects made on the main thread, one person a
+  frame. After each person it asks its owner which one next (the window: the first cell on screen without one), and
+  Stop drops the one being read and starts nothing more. skinloader probe (first job): order 0, 1, 2, then after a
+  "scroll" 60, 61, 62, 63, stopped at 7 and nothing more after; about 70 ms a person at mip skip 2 (512 px textures);
+  worst frame while loading 51-57 ms vs 34 ms before. Raw built people stand in the job's saved ragdoll pose (spikes):
+  they are always shown through SkinModel (bind pose, then posed), which is right for all 7.
+  Not done yet: the Skins window, the skin choice sent to the others.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

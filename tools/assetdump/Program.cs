@@ -4,6 +4,21 @@ using CscCoop.Skins;
 
 // Lists the skinned meshes in a scene file: their game object, mesh (with where its data is) and materials' textures.
 var dir = args[0]; var level = args[1]; var filter = args.Length > 2 ? args[2] : "";
+if (level == "catalog")
+{
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    var people = PersonReader.Catalog(dir, Console.WriteLine);
+    Console.WriteLine($"{people.Count} people in {sw.ElapsedMilliseconds} ms");
+    foreach (var p in people) Console.WriteLine($"  {p.File}#{p.Root}  '{p.Name}' -> '{p.Display}'  meshes {p.Meshes}");
+    if (filter != "")
+    {
+        var pick = people.Find(x => x.Display.Contains(filter));
+        sw.Restart();
+        var d = PersonReader.Read(new AssetSet(dir), pick, 2);
+        Console.WriteLine($"read '{pick.Display}' at mip skip 2: {d.Meshes.Count} meshes, {d.Textures.Count} textures, {d.Bytes / 1024} KB in {sw.ElapsedMilliseconds} ms");
+    }
+    return;
+}
 if (level == "props")
 {
     // Texture property names (and keyword sets) used by the people's materials across every scene file.
