@@ -10,7 +10,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "csccoop";
     public const string Name = "Crime Scene Cleaner Co-op";
-    public const string Version = "0.4.2";
+    public const string Version = "0.4.3";
 
     internal static ManualLogSource L;
     internal static BepInEx.Configuration.ConfigEntry<bool> SkipIntro;
