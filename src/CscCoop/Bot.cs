@@ -141,6 +141,7 @@ public partial class Bot : MonoBehaviour
         if (test == "stackreward") StackRewardTest(t, ses, w);
         if (test == "mails") MailsTest(t, ses, w);
         if (test == "vanrace") VanRaceTest(t, ses, w);
+        if (test == "skins") SkinsTest(t, ses, w);
         if (test == "report") ReportTest(t, ses, w);
         if (test == "fixlift") FixLiftTest(t, ses, w);
         if (test == "bagmerge") BagMergeTest(t, ses, w);

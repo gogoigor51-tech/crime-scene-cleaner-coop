@@ -198,6 +198,7 @@ public class CoopRunner : MonoBehaviour
         }
         catch (Exception e) { Plugin.L.LogError($"COOP tick failed: {e}"); t0 = t1 = t2 = t3 = prof.ElapsedTicks; }
         Watchdog.Where = "smooth"; World.Smooth(Time.deltaTime); t4 = prof.ElapsedTicks;
+        Watchdog.Where = "skins"; SkinSync.Tick(this);
         Watchdog.Where = "ghosts"; DrawGhosts(); t5 = prof.ElapsedTicks;
         Watchdog.Where = "after mod update";
         double ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
@@ -236,11 +237,14 @@ public class CoopRunner : MonoBehaviour
             g.Pose(GameWorld.U(pose.Pos), pose.Yaw, pose.Pitch, carry, pose.Tool, GameWorld.U(pose.ToolPos), GameWorld.U(pose.ToolRot), pose.ToolScale,
                 (pose.Flags & CoopCore.PlayerPose.PoseUsing) != 0, Time.deltaTime);
             g.SetFlashlight((pose.Flags & CoopCore.PlayerPose.PoseFlashlight) != 0, World.Flashlight != null ? World.Flashlight.flashlight : null);
+            SkinSync.Dress(rp.Number, g);
             if (body) Bodies.Shoulder(held, rp.Number, g);
             Ghost = g;
         }
         foreach (var kv in ghosts) if (!Session.Players.ContainsKey(kv.Key) && kv.Value?.Root != null) kv.Value.SetActive(false);
     }
+
+    public PlayerFigure GhostOf(byte n) => ghosts.TryGetValue(n, out var g) && g != null && g.Root != null ? g : null;
 
     static readonly Color[] colors = { Color.cyan, new(1, 0.5f, 0), Color.magenta, Color.green };
 }

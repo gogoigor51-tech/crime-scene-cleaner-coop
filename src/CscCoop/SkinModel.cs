@@ -81,6 +81,14 @@ public sealed class SkinModel
     // A person built from the game's files (SkinFiles.Build): bones found by name.
     public static SkinModel FromBuilt(GameObject built, Transform[] humanoid, string source, Transform parent)
     {
+        var m = FromBuiltInner(built, humanoid, source, parent);
+        m.built = true;
+        return m;
+    }
+    bool built;   // made from the files: its meshes, materials and textures are ours to destroy
+
+    static SkinModel FromBuiltInner(GameObject built, Transform[] humanoid, string source, Transform parent)
+    {
         int mapped = 0;
         foreach (var t in humanoid) if (t != null) mapped++;
         built.transform.SetParent(Shelf, false);
@@ -172,7 +180,7 @@ public sealed class SkinModel
         }
     }
 
-    public void Destroy() { if (Root != null) Object.Destroy(Root); }
+    public void Destroy() { if (Root == null) return; if (built) Skins.SkinFiles.Destroy(Root); else Object.Destroy(Root); }
 
     // Tests: where the left arm points (upper arm to forearm), in the figure's space.
     public string ArmInfo(Transform figureRoot)

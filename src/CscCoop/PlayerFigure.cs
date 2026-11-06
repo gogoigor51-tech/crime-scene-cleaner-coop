@@ -23,6 +23,7 @@ public sealed class PlayerFigure
     public readonly ToolLook Tool;
     // A skin: one of the game's people posed from this figure's bones, which then only drive it (SkinModel).
     public SkinModel Skin { get; private set; }
+    public bool OwnMeshShown => own.enabled;
     readonly SkinnedMeshRenderer own;
     Transform[] Bones => new[] { hips, spine, chest, neck, head, upperArm[0], upperArm[1], foreArm[0], foreArm[1], hand[0], hand[1], thigh[0], thigh[1], shin[0], shin[1], foot[0], foot[1] };
     public readonly int Vertices;

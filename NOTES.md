@@ -572,7 +572,18 @@ victims' bodies" only on the host, a restart only on the host.
   columns, every bone bound at the origin: the previews stood in their T pose (the limbs had no direction to follow;
   the earlier file-built probe only looked posed through the torso fallback). Transposed: posed as the figure.
 - Act II people hold a second rig with the same bone names: the humanoid bones are taken among the skinned ones.
-  Not done yet: the skin choice sent to the others and shown on them.
+- Sending skins (Skins/SkinSync.cs): a player's choice (the person's key; every player's game has the same files) is
+  global state per player (Ev.Skin = 42, state key 0x30000 + player), sent when chosen and when the player gets its
+  number, replayed to a player who joins later, whatever scene. Each machine loads the others' people one at a time
+  in the background (SkinLoader, mip skip 1: textures at half size) once their figure is drawn here, and puts them
+  on (PlayerFigure.SetSkin: the mod's mesh hidden, its bones still pose the person and place the tool); "" puts the
+  mod's figure back. A skin made from the files is destroyed with its meshes, materials and textures when replaced.
+  skins suite (run-pair -Test skins, first job): the host chooses GDGreg, the client the Senator; each sees the other
+  as that person, the mod's mesh hidden; the client chooses none, the host sees the mod's figure again: PASS 4/4
+  (twice); mutant skin-local (never sent): 2/4. Screenshot shot_skins_host.png: the client as the Senator. figure
+  11/11, flashlight 8/8, toolcarry 7/7 after these changes.
+  Not tested by players yet. Open: walking and poses come from the mod's simple figure; a held tool can sit a few cm
+  off the person's hand (proportions differ); the window's list may hold people the owner wants out.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's
