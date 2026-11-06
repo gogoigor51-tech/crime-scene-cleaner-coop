@@ -26,6 +26,7 @@ untested. [Download the latest release](../../releases/latest). Русская �
 | Following the host into jobs, leaving together, each player's own report, money and skills | works |
 | Laptop jobs and mails in the apartment reach both | works |
 | Players see each other: a figure with head/limbs, the tool in hand, a carried body over the shoulder | works |
+| Each other's personal flashlight; arcade machines (Super Stacker) are each player's own | bot suites only, not tested by players |
 | Items: carry, throw, push with tools; another player's item can't be taken from their hands | works |
 | Bodies: carry, throw (falls on both), into the van; counted once per body | works (double count fixed in 0.4.2) |
 | Blood: cleaned stains, new stains, stains cleaned away; objective percent matches | works |
@@ -35,13 +36,11 @@ untested. [Download the latest release](../../releases/latest). Русская �
 | Evidence, valuables (on both reports), secrets, cassettes, broken objects and shards | works |
 | Story objects (e.g. the attic hatch in the first job), objectives added during a job, objective counters | works |
 | Jobs where the two saves differ a little (Villa): only the differing table stops being shared | works (0.4.2) |
-| CCTV laptop (Smart House and later): the hack is shared | works |
+| CCTV laptop (Smart House and later): the hack and deleted recordings are shared, the objective counts for both | hack: works; recordings: bot suite only, not tested by players |
 | Job restart from the pause menu restarts it for both | 0.4.2, not tested by players |
 
 ## Known issues
 
-- **CCTV recordings:** deleting the recordings has to be done by each player on their own laptop; the objective
-  doesn't count for the other player.
 - **Objective maximums can differ** between players (e.g. furniture 1/21 vs 1/26): the game itself raises the
   maximum when furniture that already stood in place is picked up and put back.
 - **Upgraded tools** (e.g. the microfibre mop) may show as the basic tool of the same kind on the other player's
@@ -65,7 +64,7 @@ player's machine under one id, then asks "what's wrong?". Reports land in `BepIn
   (`dotnet run --project src/CoopCore.Tests`).
 - `src/CscCoop`: the plugin. `NOTES.md` is the full engineering log: what each game system does, why each fix was
   needed, and the evidence.
-- `tools/run-pair.ps1 -Test <items|stains|bodies|doors|trash|world2|jobs|laptop|cctv|figure>` runs two copies on one
+- `tools/run-pair.ps1 -Test <items|stains|bodies|doors|trash|world2|jobs|laptop|cctv|figure|breakhit>` runs two copies on one
   PC with bots over localhost and checks the result (`tools/<test>_report.py`); `tools/run-census.ps1` lists every
   component type in every job.
 
@@ -87,8 +86,8 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 
 **Общее:** заказы, предметы, тела (без двойного счёта), кровь, мусор, двери, ящики, лифты, питание, конвейеры,
 терминалы, мебель, улики, ценности, секреты, кассеты, сюжетные объекты (чердак), счётчики заданий, взлом ноутбука
-камер. Друг виден с инструментом в руках и телом на плече.
+камер и удалённые записи (проверено ботами, вживую ещё нет). Друг виден с инструментом в руках и телом на плече.
 
-**Известные проблемы:** удалять записи камер каждый должен у себя; максимум мебели может отличаться (так считает
+**Известные проблемы:** максимум мебели может отличаться (так считает
 сама игра); улучшенный инструмент у друга может выглядеть базовым; рация в Spa и перезапуск заказа вживую не
 проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире.

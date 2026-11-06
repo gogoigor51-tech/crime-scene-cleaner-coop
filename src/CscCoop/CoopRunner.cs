@@ -171,6 +171,8 @@ public class CoopRunner : MonoBehaviour
         ghosts.Clear();
     }
 
+    void LateUpdate() => HandsOff.FreeCursor();
+
     void Update()
     {
         Watchdog.Frame(); Watchdog.Where = "frame start";
@@ -178,6 +180,7 @@ public class CoopRunner : MonoBehaviour
         IntroSkip.Tick(World);
         WindowPlacer.Tick();
         Quiet.Tick();
+        HandsOff.Tick();
         if (Session == null) return;
         // An unfocused Unity window pauses (no Update, no network): an alt-tabbed player froze the session for
         // everyone, and in the two-window test the unfocused copy stood still (world2 suite: the host's steps ran
@@ -232,6 +235,7 @@ public class CoopRunner : MonoBehaviour
             var carry = body ? PlayerFigure.Carry.Body : held >= 0 ? PlayerFigure.Carry.Item : PlayerFigure.Carry.None;
             g.Pose(GameWorld.U(pose.Pos), pose.Yaw, pose.Pitch, carry, pose.Tool, GameWorld.U(pose.ToolPos), GameWorld.U(pose.ToolRot), pose.ToolScale,
                 (pose.Flags & CoopCore.PlayerPose.PoseUsing) != 0, Time.deltaTime);
+            g.SetFlashlight((pose.Flags & CoopCore.PlayerPose.PoseFlashlight) != 0, World.Flashlight != null ? World.Flashlight.flashlight : null);
             if (body) Bodies.Shoulder(held, rp.Number, g);
             Ghost = g;
         }

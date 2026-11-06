@@ -10,12 +10,12 @@ public struct PlayerPose
     public float Yaw, Pitch;
     public short HeldItem;   // -1 = nothing; a body is its entity index (items first, then bodies)
     public short Tool;       // equipped tool: game tool id, -1 = none, -2 = power washer lance (ToolNone/ToolLance)
-    public byte Flags;       // PoseUsing: the tool is being used right now
+    public byte Flags;       // PoseUsing: the tool is being used right now; PoseFlashlight: the personal flashlight is on
     public V3 ToolPos;       // the tool's root relative to the player (feet, yaw), as the owner's first-person view holds it
     public Q4 ToolRot;
     public float ToolScale;
     public const short ToolNone = -1, ToolLance = -2;
-    public const byte PoseUsing = 1;
+    public const byte PoseUsing = 1, PoseFlashlight = 2;
 }
 
 public struct ItemSample
@@ -137,6 +137,9 @@ public sealed class Session
     double[] releasedAt = Array.Empty<double>();
     bool[] wasHeld = Array.Empty<bool>();
     int[] restSends = Array.Empty<int>();
+    V3[] sentPos = Array.Empty<V3>();   // the state of our items as last sent, to catch slow drift
+    Q4[] sentRot = Array.Empty<Q4>();
+    bool[] sentKnown = Array.Empty<bool>();
     int refreshCursor;
 
     double now, nextPose, nextItems, nextHello, nextRtt;
@@ -278,7 +281,7 @@ public sealed class Session
         synced = false;
         int n = key == 0 ? 0 : world.ItemCount;
         owner = new byte[n]; epoch = new ushort[n]; ownerHeld = new bool[n];
-        pendingClaim = new double[n]; stillSince = new double[n]; releasedAt = new double[n]; wasHeld = new bool[n]; restSends = new int[n];
+        pendingClaim = new double[n]; stillSince = new double[n]; releasedAt = new double[n]; wasHeld = new bool[n]; restSends = new int[n]; sentPos = new V3[n]; sentRot = new Q4[n]; sentKnown = new bool[n];
         for (int i = 0; i < n; i++) { epoch[i] = 1; pendingClaim[i] = -1; }
         eventState.Clear(); eventOrder.Clear();
         refreshCursor = 0;
@@ -564,6 +567,10 @@ public sealed class Session
             // refresh (all items, ~10 s) corrected the resting spot (owner's manual test: positions arrived late).
             if (s.Held || !s.Sleeping) { sendList.Add(i); restSends[i] = 3; }
             else if (restSends[i] > 0) { sendList.Add(i); restSends[i]--; }
+            // "Asleep" isn't "still": stacked crates in the first job creep a few mm a second on the owner while
+            // their rigidbodies say asleep, so only the ~10 s round-robin refresh moved the other copies (items
+            // suite: one crate 5-30 cm apart at the end). An item that drifted from what was last sent goes out.
+            else if (Mutant != "no-drift" && Drifted(i, s)) { sendList.Add(i); restSends[i] = 1; }
         }
         if (IsHost)
         {
@@ -585,6 +592,16 @@ public sealed class Session
         else WriteStates(sendList, hostId, false);
     }
 
+    const float DriftDistance = 0.005f, DriftDot = 0.99985f;   // 5 mm; |dot| of cos(1 degree): a 2 degree turn
+    bool Drifted(int i, in ItemSample s)
+    {
+        if (i >= sentPos.Length) return false;
+        if (!sentKnown[i]) { sentKnown[i] = true; sentPos[i] = s.Pos; sentRot[i] = s.Rot; return false; }   // where it was found
+        var q = sentRot[i];
+        float dot = MathF.Abs(q.X * s.Rot.X + q.Y * s.Rot.Y + q.Z * s.Rot.Z + q.W * s.Rot.W);
+        return s.Pos.DistanceTo(sentPos[i]) > DriftDistance || dot < DriftDot;
+    }
+
     void WriteStates(List<int> items, ulong peer, bool reliable, Dictionary<int, ItemSample> source = null)
     {
         int perPacket = (Wire.MaxPacket - 12) / StateBytes;
@@ -599,6 +616,7 @@ public sealed class Session
                 var s = source != null && source.TryGetValue(i, out var rs) ? rs : world.ReadItem(i);
                 w.Write((ushort)i); w.Write(epoch[i]); w.Write((byte)(s.Held ? 1 : 0));
                 w.Write(s.Pos); w.Write(s.Rot); w.Write(s.Vel);
+                if (source == null && i < sentPos.Length) { sentPos[i] = s.Pos; sentRot[i] = s.Rot; sentKnown[i] = true; }
             }
             Send(peer, reliable);
         }

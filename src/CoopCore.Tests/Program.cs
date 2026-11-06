@@ -25,6 +25,7 @@ static class Program
         Interpolation();
         Scenario(seed: 1, loss: 0.2f);
         Scenario(seed: 7, loss: 0.35f);
+        Creep();
         Console.WriteLine($"RESULT: {(fail == 0 ? "PASS" : "FAIL")} ({pass} passed, {fail} failed)");
         return fail == 0 ? 0 : 1;
     }
@@ -247,6 +248,37 @@ static class Program
         float hostRtt = host.S.Players.TryGetValue(c1.S.Me, out var c1p) ? c1p.RttMs : 0;
         Check(c1.S.RttMs > 50 && c1.S.RttMs < 160 && hostRtt > 50 && hostRtt < 160, $"rtt: measured on both sides (client {c1.S.RttMs:F0} ms, host {hostRtt:F0} ms)");
         Check(host.S.Dropped == 0, $"final: host dropped no malformed packets ({host.S.Dropped})");
+    }
+
+    // A host item that creeps while its rigidbody says asleep (the first job's stacked crates: a few mm a second) in a
+    // job-sized table, where the round-robin refresh comes round only every ~10 s: the client's copy must keep up.
+    static void Creep()
+    {
+        Console.WriteLine("-- creep: an item moving slowly while reported asleep, 600 items");
+        var net = new FakeNet(3) { Loss = 0.2f };
+        const int Items = 600, Crate = 300;
+        const uint Scene = 0x0BADCAFE;
+        var hw = new FakeWorld(Items, 3) { Key = Scene }; var cw = new FakeWorld(Items, 3) { Key = Scene };
+        var ht = net.Join(100); var ct = net.Join(101);
+        var hs = new Session(true, ht, hw, hostId: 100); var cs = new Session(false, ct, cw, hostId: 100);
+        double maxOff = 0;
+        void Run(double seconds, bool creep)
+        {
+            for (double t = 0; t < seconds; t += 1 / 60.0)
+            {
+                net.Advance(1 / 60.0);
+                if (creep) hw.Items[Crate].Pos.X += 0.004f / 30;   // 4 mm a second, asleep all along
+                hw.Step(1 / 60.0); cw.Step(1 / 60.0);
+                hs.Tick(net.Now); cs.Tick(net.Now);
+                if (creep && t > 1) maxOff = Math.Max(maxOff, cw.Items[Crate].Pos.DistanceTo(hw.Items[Crate].Pos));
+            }
+        }
+        Run(3, false);
+        Check(cs.Synced && hw.Items[Crate].Sleeping, "creep: synced, the crate asleep on the host");
+        Run(20, true);
+        Check(maxOff < 0.02, $"creep: the client's copy stays within 2 cm of the creeping crate (max {maxOff * 100:F1} cm)");
+        Run(1, false);
+        Check(cw.Items[Crate].Pos.DistanceTo(hw.Items[Crate].Pos) < 0.006f, $"creep: where the host has it once it stops ({cw.Items[Crate].Pos.DistanceTo(hw.Items[Crate].Pos) * 100:F1} cm)");
     }
 
     static bool Agree(List<Peer> peers, Func<int, ushort> _)

@@ -23,8 +23,13 @@ public static class Actions
         "Interactable.Interact",
         // A click on a ShortcutDoors goes Interact -> TryOpen (first time) / Toggle, which tween by themselves, not
         // through OpenDoors (ISIL; owner's manual test). Interact itself is not replayed: it checks the clicking
-        // player's side of the door, which the other player may not be on.
-        "ShortcutDoors.Toggle", "ShortcutDoors.TryOpen",
+        // player's side of the door, which the other player may not be on. Toggle is not here any more: replayed
+        // as a toggle, any missed or doubled event left the door inverted for good (owner's test on Developers'
+        // Hell); Doors shares the open/closed state after every door path instead.
+        // TryOpen is a real click's entry (Interact -> TryOpen -> OnOpen -> Toggle): replayed, it toggled the door
+        // again on top of the shared state, so every click ended the other way on the other machine (owner's test of
+        // 0.4.3-test, doorclick suite). Replayed only for a locked door, where it is the rattle (NotARattle).
+        "ShortcutDoors.TryOpen",
         "LabLiftLever.Interact", "LabSecretLiftController.Interact", "LabLiftController.ChangeLiftPosition",
         "ExtendableLadder.Interact", "ElectrickShockBox.Interact", "ElectricShockLeaver.Interact",
         "ChangeObjectPositionQueue.Interact", "ElectronicPicture.Interact", "BathController.Interact",
@@ -67,6 +72,12 @@ public static class Actions
         // counts only bodies added): found by one player, the other's van collect of it didn't count (bodies
         // suite: the host 2, the client 1 for one body each).
         "BodyQuest.AddBodyToQuest",
+        // Owner's test of 0.4.3-test on Developers' Hell. The Super Stacker reward (the passage behind the shelf at
+        // 50 000 points): EventOnScoreReach.CheckScore(score) is called by the minigame on leaving it, on the
+        // player who played only, since the minigame is each player's own; replayed with the score, the passage
+        // opens for everyone. Deleting a mail on an office computer (InspectableMail.DeleteMail: once per mail,
+        // it clears its own flag; DeleteMailQuest counts it): the mail UI is personal, the delete is shared.
+        "EventOnScoreReach.CheckScore", "InspectableMail.DeleteMail",
     };
     static readonly HashSet<string> Skip = new() { "OpenUIPanelOnInteract", "BarmanInteraction", "MusicDisc", "UVLampController" };
 
@@ -90,7 +101,11 @@ public static class Actions
     {
         var asm = typeof(Openable).Assembly;
         var tables = new Dictionary<Type, Act>();
-        foreach (var entry in Whitelist)
+        var entries = new List<string>(Whitelist);
+        if (Env.Get("CSCCOOP_MUTANT") == "door-old") entries.Add("ShortcutDoors.Toggle");   // the 0.4.2 rule
+        if (Env.Get("CSCCOOP_MUTANT") == "stack-local") entries.Remove("EventOnScoreReach.CheckScore");
+        if (Env.Get("CSCCOOP_MUTANT") == "mail-local") entries.Remove("InspectableMail.DeleteMail");
+        foreach (var entry in entries)
         {
             var dot = entry.IndexOf('.');
             var type = asm.GetType(entry.Substring(0, dot));
@@ -137,6 +152,39 @@ public static class Actions
         return m.Invoke(c, null);
     }
 
+    // A player's own tool (PortableItem: lamps, buckets...) is in the scene table too, at the same place on every
+    // machine, so a replay by index switched the other player's own lamp (owner's test: turning on my lamp 1 turned
+    // on the friend's lamp 1). Tools are shared by Dyn, with the tool's own state.
+    static bool InTool(Component c) => c.GetComponentInParent<PortableItem>() != null && Env.Get("CSCCOOP_MUTANT") != "lamp-index";
+
+    // An interactable whose OnInteract opens a UI panel is that player's own screen, like OpenUIPanelOnInteract. The
+    // Super Stacker arcade (Developers' Hell) is a plain Interactable -> StackMiniGamePresenter.EnterTheGame: replayed,
+    // it opened the minigame on every machine, which switches each player off (owner's test).
+    static bool OpensPanel(Component c)
+    {
+        if (Env.Get("CSCCOOP_MUTANT") == "arcade-replay") return false;
+        bool ui = false;
+        var ev = c.TryCast<Interactable>()?.OnInteract;
+        if (ev != null)
+            for (int k = 0; k < ev.GetPersistentEventCount(); k++)
+            {
+                var t = ev.GetPersistentTarget(k);
+                if (t != null && (t.TryCast<UIPanel>() != null || t.TryCast<Component>()?.GetComponent<UIPanel>() != null)) ui = true;
+            }
+        return ui;
+    }
+
+    // A door's TryOpen is shared only while the door is locked (the rattle); an open/close is Doors' state event.
+    static bool NotARattle(Component c)
+    {
+        if (Env.Get("CSCCOOP_MUTANT") == "door-tryopen") return false;
+        var d = c.TryCast<ShortcutDoors>();
+        return d != null && !d.IsLocked;
+    }
+
+    // Test probes: the index of an object in the first action table that has it (-1 if none).
+    public static int IndexOfAny(Component c) { foreach (var a in acts) { int i = a.IndexOf(c); if (i >= 0) return i; } return -1; }
+
     static void Pre() => depth++;
 
     static void Post(object __instance, MethodBase __originalMethod, object[] __args)
@@ -146,6 +194,7 @@ public static class Actions
         if (byMethod.TryGetValue(__originalMethod, out var a0) && CastTo(c, a0.Type) == null) return;   // a folded call on another type
         if (Skip.Contains(c.GetIl2CppType().Name)) return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("Hub")) return;   // each player's own apartment
+        if (InTool(c) || OpensPanel(c) || NotARattle(c)) return;
         if (!byMethod.TryGetValue(__originalMethod, out var act)) return;
         int i = act.IndexOf(c);
         if (i < 0) return;
@@ -173,7 +222,7 @@ public static class Actions
         if ((uint)id >= (uint)acts.Count) return;
         var act = acts[id];
         var target = act.Get(i);
-        if (target == null) return;
+        if (target == null || InTool(target) || NotARattle(target)) return;
         Plugin.L.LogInfo($"COOP action {act.Name} on {act.Type.Name} {i} from another player");
         var typed = CastTo(target, act.Type);
         if (typed == null) return;

@@ -93,6 +93,14 @@ public static class Furniture
         if (h >= 0) WorldEvents.Send(Ev.Furniture, w => { w.Write((ushort)h); w.Write(condition); w.Write((short)f); }, HoloKey + (uint)h);
     }
 
+    // A piece put on its spot during the job, ours or replayed: kept kinematic on every machine (GameWorld.Placed).
+    [HarmonyPatch(typeof(FixableFurniture), nameof(FixableFurniture.Fix))] [HarmonyPostfix]
+    static void Fixed(FixableFurniture __instance)
+    {
+        var f = __instance.TryCast<FixableFurniture>();
+        if (f != null) CoopRunner.Instance?.World?.PlacedNow(f);
+    }
+
     // ---- heavy furniture ----
 
     static HeavyItemController held;   // ours, being pushed

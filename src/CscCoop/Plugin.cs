@@ -41,15 +41,19 @@ public class Plugin : BasePlugin
         harmony.PatchAll(typeof(Trash));
         harmony.PatchAll(typeof(Quests));
         harmony.PatchAll(typeof(Furniture));
+        harmony.PatchAll(typeof(Elevators));
+        harmony.PatchAll(typeof(FixGuard));
         harmony.PatchAll(typeof(Objectives));
         harmony.PatchAll(typeof(Cctv));
         harmony.PatchAll(typeof(ToolLook));
         Watchdog.Start();
+        HandsOff.Start();
         AddComponent<CoopRunner>();
         AddComponent<CoopMenu>();
         AddComponent<CoopScreen>();
         AddComponent<Reports>();
         Actions.Register(CoopRunner.Instance.World, harmony);
+        if (Env.Get("CSCCOOP_TEST") == "report") Bot.PatchReportCounters(new Harmony(Guid + ".report"));
         if (Env.Get("CSCCOOP_TEST") == "stainprobe") new Harmony(Guid + ".probe").PatchAll(typeof(StainProbePatches));
         if (Env.Get("CSCCOOP_TEST") != "") AddComponent<Bot>();
     }

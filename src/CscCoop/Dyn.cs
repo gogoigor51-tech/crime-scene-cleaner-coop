@@ -12,11 +12,16 @@ namespace CscCoop;
 //    state event per object, 10 times a second while it moves, so late joiners get it too.
 //  - The others build a puppet from the same prefab (bags: the trash can's garbagePrefab; tools: a loaded
 //    PortableItem prefab of the same name), kinematic, following the owner's pose.
-//  - Grabbing a bag puppet takes the bag over (DynTake, ordered by the host): the grabber simulates it from
-//    then on and the old owner turns its copy into a puppet. Tool puppets can't be grabbed (each tool
-//    belongs to its player's inventory).
-//  - Buckets carry their water and dirt level (LiquidContainer), so the friend's bucket isn't shown empty
-//    (owner's request; looks only: nobody can use another player's bucket).
+//  - Grabbing a puppet takes it over (DynTake, ordered by the host): the grabber simulates it from then on and
+//    the old owner turns its copy into a puppet. That includes other players' tools: anyone can carry a friend's
+//    bucket or lamp (owner's request). Only the player it belongs to (the id's player number) can put a tool back
+//    into an inventory (PortableItem.PickUp): picked up by someone else it would be in two inventories; its owner
+//    takes it back first if someone else simulates it.
+//  - Buckets carry their water and dirt level (LiquidContainer) and their cleaning products (activeBuffs, as
+//    "buffId:effectiveness:threshold;..."), power washer stations their water and products: a friend's bucket
+//    looks the same, and a mop rinsed in it takes its products (CleanTool copies the bucket's buffs). Using another
+//    player's bucket or station here (rinsing, pouring a product or water in, emptying it) takes it over first, so its new
+//    levels and products come from this machine (as in the earlier csc-coop prototype).
 //  - Gone (bag merged into another, bag into the van, tool picked up): alive=false removes the puppet; a bag
 //    that went into the van is collected on the others' side too, so their report counts it.
 [HarmonyPatch]
@@ -27,6 +32,10 @@ public static class Dyn
     sealed class Obj
     {
         public uint Id;
+        public byte Owner;   // who simulates it now (for bags meeting: the lower number merges)
+        public GarbageBagConnector Bag;
+        public int SentSize = -1;
+        public Vector3 Vel;   // bags: the owner's velocity (a copy here is kinematic)
         public Kind Kind;
         public string Name;
         public GameObject Go;
@@ -36,7 +45,11 @@ public static class Dyn
         public Vector3 Scale = Vector3.one;
         public float NextSend;
         public LiquidContainer Liquid;
+        public PowerWasherStation Washer;
+        public LampController Lamp;
+        public bool SentLamp;
         public float SentWater = -1, SentTaint = -1;
+        public string SentBuffs = "", AppliedBuffs = "";
     }
 
     static readonly Dictionary<uint, Obj> byId = new();
@@ -63,8 +76,8 @@ public static class Dyn
         if (building || go == null || byGo.ContainsKey(go.Pointer)) return;
         var s = S;
         byte me = s == null ? (byte)0 : s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
-        var o = new Obj { Id = ((uint)me << 20) | (++counter & 0xFFFFF), Kind = kind, Name = PrefabName(go.name), Go = go, Mine = true };
-        if (kind == Kind.Tool) o.Liquid = go.GetComponentInChildren<LiquidContainer>(true);
+        var o = new Obj { Id = ((uint)me << 20) | (++counter & 0xFFFFF), Kind = kind, Name = PrefabName(go.name), Go = go, Mine = true, Owner = me, Bag = go.GetComponent<GarbageBagConnector>() };
+        if (kind == Kind.Tool) Equip(o);
         byId[o.Id] = o; byGo[go.Pointer] = o;
         Spawned++;
     }
@@ -79,6 +92,8 @@ public static class Dyn
         if (s == null) return;
         if (sceneKey != W.SceneKey) OnScene();
         if (!s.Synced) return;
+        UvSlots.Tick();
+        BagsTick();
         float now = Time.unscaledTime;
         foreach (var o in new List<Obj>(byId.Values))
         {
@@ -89,6 +104,10 @@ public static class Dyn
                 var t = o.Go.transform;
                 bool moved = (t.position - o.SentPos).sqrMagnitude > 1e-4f || Quaternion.Angle(t.rotation, o.SentRot) > 0.5f || o.SentPos == Vector3.zero;
                 if (o.Liquid != null && (Mathf.Abs(o.Liquid.WaterLevel - o.SentWater) > 0.01f || Mathf.Abs(o.Liquid.TaintLevel - o.SentTaint) > 0.01f)) moved = true;
+                if (o.Washer != null && Mathf.Abs(o.Washer.waterLevel - o.SentWater) > 0.01f) moved = true;
+                if ((o.Liquid != null || o.Washer != null) && Buffs(o) != o.SentBuffs) moved = true;
+                if (o.Lamp != null && o.Lamp.isOn != o.SentLamp) moved = true;
+                if (o.Bag != null && o.Bag.CurrentSize != o.SentSize) moved = true;
                 if (!moved && o.Go.activeInHierarchy == true && o.NextSend > 0) continue;
                 o.NextSend = now + 0.1f;
                 SendState(o, o.Go.activeInHierarchy, false);
@@ -125,7 +144,11 @@ public static class Dyn
         o.SentPos = pos; o.SentRot = rot;
         bool liquid = o.Liquid != null;
         float water = liquid ? o.Liquid.WaterLevel : 0, taint = liquid ? o.Liquid.TaintLevel : 0;
-        o.SentWater = water; o.SentTaint = taint;
+        bool washer = o.Washer != null;
+        if (washer) water = o.Washer.waterLevel;
+        string buffs = Buffs(o);
+        bool lamp = o.Lamp != null, lampOn = lamp && o.Lamp.isOn;
+        o.SentWater = water; o.SentTaint = taint; o.SentBuffs = buffs; o.SentLamp = lampOn;
         WorldEvents.Send(Ev.DynState, w =>
         {
             w.Write(o.Id); w.Write((byte)o.Kind); w.Write(o.Name ?? "");
@@ -133,6 +156,13 @@ public static class Dyn
             w.Write(scale.x); w.Write(scale.y); w.Write(scale.z);
             w.Write(alive); w.Write(inVan);
             w.Write(liquid); w.Write(water); w.Write(taint);
+            w.Write(buffs); w.Write(washer);   // last: 0.4.2 readers stop before them
+            w.Write(lamp); w.Write(lampOn);
+            w.Write(o.SentSize = o.Bag != null ? o.Bag.CurrentSize : -1);
+            var brb = o.Bag != null && o.Go != null ? o.Go.GetComponent<Rigidbody>() : null;
+            var bv = brb != null && !brb.isKinematic ? brb.velocity : Vector3.zero;
+            w.Write(bv.x); w.Write(bv.y); w.Write(bv.z);
+            w.Write(o.Bag != null && o.Bag.garbageItem != null ? o.Bag.garbageItem.trashValue : 0f);
         }, StateBase | o.Id);
     }
 
@@ -144,6 +174,15 @@ public static class Dyn
         var scale = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
         bool alive = r.ReadBoolean(), inVan = r.ReadBoolean();
         bool liquid = r.ReadBoolean(); float water = r.ReadSingle(), taint = r.ReadSingle();
+        bool more = r.BaseStream.Position < r.BaseStream.Length;
+        string buffs = more ? r.ReadString() : null;
+        bool washer = more && r.ReadBoolean();
+        bool lampKnown = more && r.BaseStream.Position < r.BaseStream.Length;
+        bool lamp = lampKnown && r.ReadBoolean(), lampOn = lampKnown && r.ReadBoolean();
+        int bagSize = r.BaseStream.Position + 4 <= r.BaseStream.Length ? r.ReadInt32() : -1;
+        bool bagMore = r.BaseStream.Position + 16 <= r.BaseStream.Length;
+        var bagVel = bagMore ? new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()) : Vector3.zero;
+        float bagFill = bagMore ? r.ReadSingle() : -1;
         byId.TryGetValue(id, out var o);
         if (o == null && kind == Kind.Shard)
         {
@@ -154,7 +193,9 @@ public static class Dyn
             if (d != null) RegisterShards(d, breakable, false);
             byId.TryGetValue(id, out o);
         }
-        if (o != null && o.Mine) return;   // ours (a late echo after we took it over)
+        // Ours: a late echo after we took it over, except "gone": another player's trash can picked it up
+        // (OnConsumed), and it must go here too, or a shard picked up there stayed here (breakhit suite).
+        if (o != null && o.Mine && (alive || !inVan)) return;
         if (!alive)
         {
             if (o?.Go != null)
@@ -173,8 +214,8 @@ public static class Dyn
         {
             var go = Build(kind, name, pos, rot);
             if (go == null) return;
-            o = new Obj { Id = id, Kind = kind, Name = name, Go = go, Mine = false };
-            if (kind == Kind.Tool) o.Liquid = go.GetComponentInChildren<LiquidContainer>(true);
+            o = new Obj { Id = id, Kind = kind, Name = name, Go = go, Mine = false, Owner = (byte)(id >> 20), Bag = go.GetComponent<GarbageBagConnector>() };
+            if (kind == Kind.Tool) Equip(o);
             byId[id] = o; byGo[go.Pointer] = o;
             Puppets++;
         }
@@ -185,7 +226,83 @@ public static class Dyn
             if (Mathf.Abs(o.Liquid.WaterLevel - water) > 0.005f) o.Liquid.SetWaterLevel(water);
             if (Mathf.Abs(o.Liquid.TaintLevel - taint) > 0.005f) o.Liquid.SetTaintLevel(taint);
         }
+        if (washer && o.Washer != null && Mathf.Abs(o.Washer.waterLevel - water) > 0.005f) { o.Washer.waterLevel = water; o.Washer.SetWaterLevel(); }
+        // Switch sets the light, Interact flips isOn (earlier prototype's lamp sync)
+        if (bagSize > 0 && o.Bag != null && o.Bag.CurrentSize != bagSize) o.Bag.CurrentSize = bagSize;
+        if (o.Bag != null) { o.Vel = bagVel; if (bagFill >= 0 && o.Bag.garbageItem != null) o.Bag.garbageItem.trashValue = bagFill; }
+        if (lamp && o.Lamp != null && o.Lamp.isOn != lampOn) { o.Lamp.isOn = lampOn; o.Lamp.Switch(lampOn); Plugin.L.LogInfo($"COOP {o.Name} {o.Id:X} switched {(lampOn ? "on" : "off")} by its player"); }
+        if (buffs != null && buffs != o.AppliedBuffs && (o.Liquid != null || o.Washer != null))
+        {
+            o.AppliedBuffs = buffs;
+            if (o.Liquid != null) SetBuffs(o.Liquid.activeBuffs, buffs, d => o.Liquid.TryFindBuffBase(d, out var b) ? b : null);
+            else SetBuffs(o.Washer.activeBuffs, buffs, d => o.Washer.TryFindBuffBase(d, out var b) ? b : null);
+            Plugin.L.LogInfo($"COOP {o.Name} {o.Id:X}: products '{buffs}'");
+        }
     }
+
+    static void Equip(Obj o)
+    {
+        o.Liquid = o.Go.GetComponentInChildren<LiquidContainer>(true);
+        var pi = o.Go.GetComponent<PortableItem>();
+        o.Washer = pi != null ? pi.TryCast<PowerWasherStation>() : null;
+        o.Lamp = o.Go.GetComponentInChildren<LampController>(true);
+    }
+
+    // ---- cleaning products ----
+
+    static string Buffs(Obj o)
+    {
+        var list = o.Liquid != null ? o.Liquid.activeBuffs : o.Washer != null ? o.Washer.activeBuffs : null;
+        if (list == null) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var b in list)
+        {
+            if (b == null) continue;
+            var d = b.CreateBuffData();
+            sb.Append(System.FormattableString.Invariant($"{d.buffId}:{d.effectiveness:F2}:{d.currentEffectivenessThreshold:F2};"));
+        }
+        return sb.ToString();
+    }
+
+    static void SetBuffs(Il2CppSystem.Collections.Generic.List<BuffInstance> list, string s, Func<BucketBuffData, BuffBase> find)
+    {
+        if (list == null) return;
+        list.Clear();
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var part in s.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = part.Split(':');
+            if (f.Length != 3) continue;
+            var data = new BucketBuffData { buffId = int.Parse(f[0], ci), effectiveness = float.Parse(f[1], ci), currentEffectivenessThreshold = float.Parse(f[2], ci) };
+            var buff = find(data);
+            if (buff == null) { Plugin.L.LogWarning($"COOP unknown cleaning product {data.buffId}"); continue; }
+            var bi = new BuffInstance(buff);
+            bi.LoadBuffData(data);
+            list.Add(bi);
+        }
+    }
+
+    // A player here uses another player's bucket or station: take it over first (its levels and products then
+    // go out from here). Instance cast checked: IL2CPP folds identical bodies, so a patch can fire for other types.
+    static void Use(Component c)
+    {
+        var s = S;
+        if (c == null || s == null || !s.Synced || WorldEvents.Applying || Env.Get("CSCCOOP_MUTANT") == "bucket-look") return;
+        var pi = c.GetComponentInParent<PortableItem>();
+        if (pi == null || !byGo.TryGetValue(pi.gameObject.Pointer, out var o) || o.Mine || o.Kind != Kind.Tool) return;
+        TakeOver(o, s);
+    }
+
+    [HarmonyPatch(typeof(LiquidContainer), nameof(LiquidContainer.CleanTool))] [HarmonyPrefix] static void BucketRinse(LiquidContainer __instance) { if (__instance.TryCast<LiquidContainer>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(LiquidContainer), nameof(LiquidContainer.TryAddBuff))] [HarmonyPrefix] static void BucketProduct(LiquidContainer __instance) { if (__instance.TryCast<LiquidContainer>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(LiquidContainer), nameof(LiquidContainer.TryAddWater))] [HarmonyPrefix] static void BucketWater(LiquidContainer __instance) { if (__instance.TryCast<LiquidContainer>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(LiquidContainer), nameof(LiquidContainer.AddWater))] [HarmonyPrefix] static void BucketFill(LiquidContainer __instance) { if (__instance.TryCast<LiquidContainer>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(LiquidContainer), nameof(LiquidContainer.CleanWater))] [HarmonyPrefix] static void BucketEmpty(LiquidContainer __instance) { if (__instance.TryCast<LiquidContainer>() != null) Use(__instance); }
+    // Switching another player's lamp here: take it over, so its new on/off goes out from here.
+    [HarmonyPatch(typeof(LampController), nameof(LampController.Interact))] [HarmonyPrefix] static void LampSwitch(LampController __instance) { if (__instance.TryCast<LampController>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(UVLampController), nameof(UVLampController.Interact))] [HarmonyPrefix] static void UvLampSwitch(UVLampController __instance) { if (__instance.TryCast<UVLampController>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.TryAddBuff))] [HarmonyPrefix] static void WasherProduct(PowerWasherStation __instance) { if (__instance.TryCast<PowerWasherStation>() != null) Use(__instance); }
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.TryAddWater))] [HarmonyPrefix] static void WasherWater(PowerWasherStation __instance) { if (__instance.TryCast<PowerWasherStation>() != null) Use(__instance); }
 
     static GameObject Build(Kind kind, string name, Vector3 pos, Quaternion rot)
     {
@@ -207,6 +324,8 @@ public static class Dyn
         return go;
     }
 
+    public static bool IsMine(GameObject go) => go != null && byGo.TryGetValue(go.Pointer, out var o) && o.Mine;
+
     public static bool IsPuppet(GameObject go) => go != null && byGo.TryGetValue(go.Pointer, out var o) && !o.Mine;
 
     // ---- taking over a bag ----
@@ -215,15 +334,66 @@ public static class Dyn
     public static bool OnLocalGrab(GrabableItemController item)
     {
         if (item == null || !byGo.TryGetValue(item.gameObject.Pointer, out var o) || o.Mine) return true;
-        if (o.Kind == Kind.Tool) return false;   // bags and shards can be taken over
+        if (o.Kind == Kind.Tool && Env.Get("CSCCOOP_MUTANT") == "tool-locked") return false;   // the 0.4.2 rule
         var s = S;
         if (s == null || !s.Synced) return true;
-        o.Mine = true; o.NextSend = 0;
+        TakeOver(o, s);
+        return true;
+    }
+
+    static void TakeOver(Obj o, CoopCore.Session s)
+    {
+        o.Mine = true; o.NextSend = 0; o.Owner = s.Me;
         foreach (var rb in o.Go.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = false;
         byte me = s.Me;
         WorldEvents.Send(Ev.DynTake, w => { w.Write(o.Id); w.Write(me); });
         Taken++;
-        Plugin.L.LogInfo($"COOP took over bag {o.Id:X}");
+        Plugin.L.LogInfo($"COOP took over {o.Kind.ToString().ToLowerInvariant()} {o.Id:X} ({o.Name})");
+    }
+
+    // Whose inventory a tool belongs to: the player number its id was made with.
+    static byte BelongsTo(Obj o) => (byte)(o.Id >> 20);
+
+    // Putting a placed tool back into the inventory: only its own player's, and taken back first. The power
+    // washer station has its own PickUp (it overrides PortableItem's).
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.PickUp))] [HarmonyPrefix]
+    static bool WasherPickUp(PowerWasherStation __instance) => __instance.TryCast<PowerWasherStation>() == null || ToolPickUp(__instance);
+
+    // Taking the lance out of a power washer station (a click on it: Interact -> EquipLance, AddWasherToInventory)
+    // puts that station's lance in the clicking player's inventory, and the water it sprays is taken from a station
+    // that is a copy here and gets its owner's water level all the time: another player's washer sprayed without end
+    // (owner's test of 0.4.3-test). Same rule as picking it up: only the player it belongs to takes its lance.
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.Interact))] [HarmonyPrefix]
+    static bool WasherInteract(PowerWasherStation __instance) => LanceAllowed(__instance, "Interact");
+    [HarmonyPatch(typeof(PowerWasherStation), nameof(PowerWasherStation.EquipLance))] [HarmonyPrefix]
+    static bool WasherEquipLance(PowerWasherStation __instance) => LanceAllowed(__instance, "EquipLance");
+
+    static bool LanceAllowed(PowerWasherStation st, string how)
+    {
+        if (st == null || st.TryCast<PowerWasherStation>() == null || WorldEvents.Applying) return true;
+        var s = S;
+        if (s == null || !s.Synced || !byGo.TryGetValue(st.gameObject.Pointer, out var o) || o.Kind != Kind.Tool) return true;
+        byte me = s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
+        if (BelongsTo(o) == me) { LanceOwn++; return true; }
+        if (Env.Get("CSCCOOP_MUTANT") == "washer-lance") { LanceOthers++; Plugin.L.LogInfo($"COOP {how} on player {BelongsTo(o)}'s power washer let through (mutant)"); return true; }
+        Plugin.L.LogInfo($"COOP {how} on player {BelongsTo(o)}'s power washer refused: its lance isn't ours");
+        LanceRefused++;
+        return false;
+    }
+    public static int LanceRefused, LanceOwn, LanceOthers;   // tests: clicks on washers refused, on our own, let through on others'
+
+    [HarmonyPatch(typeof(PortableItem), nameof(PortableItem.PickUp))] [HarmonyPrefix]
+    static bool ToolPickUp(PortableItem __instance)
+    {
+        var s = S;
+        if (s == null || !s.Synced || __instance == null || !byGo.TryGetValue(__instance.gameObject.Pointer, out var o) || o.Kind != Kind.Tool) return true;
+        byte me = s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
+        if (BelongsTo(o) != me)
+        {
+            Plugin.L.LogInfo($"COOP pick-up of player {BelongsTo(o)}'s {o.Name} refused: it isn't ours (it can be carried)");
+            return false;
+        }
+        if (!o.Mine) TakeOver(o, s);
         return true;
     }
 
@@ -231,20 +401,72 @@ public static class Dyn
     {
         uint id = r.ReadUInt32(); r.ReadByte();
         if (!byId.TryGetValue(id, out var o) || o.Go == null) return;
+        o.Owner = from;
         if (o.Mine)
         {
             var g = W.Grabber;
             if (g != null && g.GrabbedRb != null && g.GrabbedRb.gameObject.Pointer == o.Go.Pointer) g.TryRelease();
-            o.Mine = false;
+            o.Mine = false; o.Owner = from;
             foreach (var rb in o.Go.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
             o.TargetPos = o.Go.transform.position; o.TargetRot = o.Go.transform.rotation;
-            Plugin.L.LogInfo($"COOP player {from} took over bag {o.Id:X}");
+            Plugin.L.LogInfo($"COOP player {from} took over {o.Kind.ToString().ToLowerInvariant()} {o.Id:X} ({o.Name})");
         }
     }
 
     // A puppet must not run game logic that changes the world: bags merging on collision happen on the owner.
+    //
+    // Two players' bags meeting. The game merges in each bag's OnCollisionEnter, each playing its own part: the bigger
+    // bag (or with equal sizes the faster) grows to the sum, the other gives its fill and shrinks away (isInAnimation
+    // guards a bag already merging). Each machine ran only its own bag's part, against a kinematic copy of the other
+    // whose speed is 0 there, so when both bags moved each machine had its own bag grow: two big bags, copies living on
+    // (owner's test: duplicates until they ended as one bag; bagmerge suite: the client had a bag of 2, the host two
+    // of 1, or both bags of 2). Now the machine with the lower player number merges them alone, once: it takes the
+    // other bag over and does what the two parts do (IncreaseBagSize on the winner, the fill moved over, DestroyBag on
+    // the other), picking the winner the game's way with the owner's velocity; the other machine leaves the pair
+    // alone. The shrunk bag's end and the grown bag's size, scale and fill go out as their state.
+    static readonly HashSet<IntPtr> merging = new();
+    public static int Merged;
+
     [HarmonyPatch(typeof(GarbageBagConnector), nameof(GarbageBagConnector.OnCollisionEnter))] [HarmonyPrefix]
-    static bool BagCollision(GarbageBagConnector __instance) => !IsPuppet(__instance.gameObject);
+    static bool BagCollision(GarbageBagConnector __instance, Collision collision)
+    {
+        var bag = __instance.TryCast<GarbageBagConnector>();
+        if (bag == null) return true;
+        if (IsPuppet(bag.gameObject) || merging.Contains(bag.gameObject.Pointer)) return false;
+        var s = S;
+        var otherGo = collision != null && collision.rigidbody != null ? collision.rigidbody.gameObject : null;
+        if (s == null || !s.Synced || otherGo == null) return true;
+        if (merging.Contains(otherGo.Pointer)) return false;
+        if (!byGo.TryGetValue(otherGo.Pointer, out var other) || other.Kind != Kind.Bag || other.Go == null || other.Mine) return true;
+        if (Env.Get("CSCCOOP_MUTANT") == "bag-local") return true;
+        if (s.Me > other.Owner || !byGo.TryGetValue(bag.gameObject.Pointer, out var mine)) return false;   // theirs to merge
+        Merge(mine, other, s);
+        return false;
+    }
+
+    static void Merge(Obj x, Obj y, CoopCore.Session s)
+    {
+        var bx = x.Bag; var by = y.Bag;
+        if (bx == null || by == null || bx.isInAnimation || by.isInAnimation) return;
+        int sum = bx.CurrentSize + by.CurrentSize;
+        var perks = new Il2CppSystem.Collections.Generic.List<PerkID>(); perks.Add((PerkID)53);
+        int max = 1 + (int)(PerksController.Instance != null ? PerksController.Instance.GetUnlockedPerkValues(perks) : 0);
+        if (sum > max) return;
+        TakeOver(y, s);
+        var xrb = x.Go.GetComponent<Rigidbody>();
+        float vx = xrb != null && !xrb.isKinematic ? xrb.velocity.magnitude : 0, vy = y.Vel.magnitude;
+        var (win, lose) = bx.CurrentSize > by.CurrentSize ? (x, y) : by.CurrentSize > bx.CurrentSize ? (y, x) : vx >= vy ? (x, y) : (y, x);
+        merging.Add(win.Go.Pointer); merging.Add(lose.Go.Pointer);
+        var scale = Vector3.Max(win.Go.transform.localScale, lose.Go.transform.localScale);
+        if (win.Bag.garbageItem != null && lose.Bag.garbageItem != null) win.Bag.garbageItem.trashValue += lose.Bag.garbageItem.trashValue;
+        win.Bag.IncreaseBagSize(scale, sum);
+        lose.Bag.DestroyBag();
+        Merged++;
+        Plugin.L.LogInfo($"COOP bags {x.Id:X} and {y.Id:X} merged here: {win.Id:X} grew to {sum}, {lose.Id:X} goes");
+    }
+
+    // A bag that finished growing can merge again.
+    public static void BagsTick() { if (merging.Count > 0) merging.RemoveWhere(p => !byGo.TryGetValue(p, out var o) || o.Go == null || o.Bag == null || !o.Bag.isInAnimation); }
 
     // A bag of ours went into the van.
     public static bool OnCollected(GarbageItem gi)
