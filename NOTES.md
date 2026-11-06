@@ -558,7 +558,21 @@ victims' bodies" only on the host, a restart only on the host.
   "scroll" 60, 61, 62, 63, stopped at 7 and nothing more after; about 70 ms a person at mip skip 2 (512 px textures);
   worst frame while loading 51-57 ms vs 34 ms before. Raw built people stand in the job's saved ragdoll pose (spikes):
   they are always shown through SkinModel (bind pose, then posed), which is right for all 7.
-  Not done yet: the Skins window, the skin choice sent to the others.
+- Skins window (Skins/SkinsWindow.cs): "Скины" / "Skins" (by the game's locale) is a copy of the pause menu's
+  "Continue" button, right after it (the pause menu's list under OptionsMenu: Continue, Restart mission, Respawn, Exit;
+  "General"/"Settings" above are tab headers). It closes the pause menu and opens an IMGUI window: a "no skin" cell,
+  then every person in cells (picture and name), the chosen one framed; a click chooses (Plugin.Skin in the config,
+  the person's key "levelN#pathID"). Pictures: each person loaded at mip skip 3 (256 px textures), posed by a
+  PlayerFigure for 10 frames under its own camera and three point lights far below the level (layer 31 only),
+  rendered once into a 256x352 RenderTexture, then destroyed. The loader asks for the first cell in view without a
+  picture (or one waiting for it); closing the window stops it, the pictures made stay. skinswindow probe: the button
+  after "Продолжить"; 9 pictures in the first 8 s, after a scroll to row 15 the loading followed (19), the choice saved,
+  nothing more after closing.
+- Bind poses: the file keeps a matrix row by row (e00 e01 e02 e03 e10 ...), Unity's indexer column by column. Read as
+  columns, every bone bound at the origin: the previews stood in their T pose (the limbs had no direction to follow;
+  the earlier file-built probe only looked posed through the torso fallback). Transposed: posed as the figure.
+- Act II people hold a second rig with the same bone names: the humanoid bones are taken among the skinned ones.
+  Not done yet: the skin choice sent to the others and shown on them.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

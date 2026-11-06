@@ -174,6 +174,14 @@ public sealed class SkinModel
 
     public void Destroy() { if (Root != null) Object.Destroy(Root); }
 
+    // Tests: where the left arm points (upper arm to forearm), in the figure's space.
+    public string ArmInfo(Transform figureRoot)
+    {
+        if (bone[5] == null || bone[7] == null) return "no arm";
+        var d = figureRoot.InverseTransformDirection(bone[7].position - bone[5].position).normalized;
+        return FormattableString.Invariant($"skin L arm {d.x:F2},{d.y:F2},{d.z:F2} bind {bindDir[5].x:F2},{bindDir[5].y:F2},{bindDir[5].z:F2} upperarm '{bone[5].name}' active {bone[5].gameObject.activeInHierarchy}");
+    }
+
     static string RelPath(Transform root, Transform t)
     {
         var parts = new List<string>();

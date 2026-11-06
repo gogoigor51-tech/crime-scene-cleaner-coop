@@ -67,10 +67,21 @@ public static class SkinFiles
             for (int i = 0; i < mats.Length; i++) mats[i] = r.Materials[i] >= 0 ? materials[r.Materials[i]] : Fallback;
             smr.sharedMaterials = mats;
         }
+        // By name, preferring the transforms the meshes are skinned to: a person can hold a second rig with the same
+        // bone names (posing that one moved nothing: the previews stood in their T pose).
+        var used = new HashSet<int>();
+        foreach (var r in d.Renderers) foreach (var b in r.Bones) if (b >= 0) used.Add(b);
         humanoid = new Transform[CcBones.Length];
-        var byName = new Dictionary<string, Transform>();
-        foreach (var t in nodes) byName[t.name] = t;
-        for (int k = 0; k < CcBones.Length; k++) byName.TryGetValue(CcBones[k], out humanoid[k]);
+        int dupes = 0;
+        for (int k = 0; k < CcBones.Length; k++)
+        {
+            int pick = -1, seen = 0;
+            for (int i = 0; i < nodes.Length; i++)
+                if (d.Nodes[i].Name == CcBones[k]) { seen++; if (pick < 0 || (used.Contains(i) && !used.Contains(pick))) pick = i; }
+            if (seen > 1) dupes++;
+            humanoid[k] = pick >= 0 ? nodes[pick] : null;
+        }
+        if (dupes > 0) Plugin.L.LogInfo($"COOP skin '{d.Person?.Display}': {dupes} humanoid bone names twice, took the skinned ones");
         if (humanoid[0] == null) { why = "no CC_Base_Hip"; Destroy(nodes[0].gameObject); return null; }
         return nodes[0].gameObject;
     }
@@ -128,11 +139,11 @@ public static class SkinFiles
         var poses = new Matrix4x4[a.BindPoses.Length];
         for (int i = 0; i < poses.Length; i++)
         {
+            // The file keeps a matrix row by row (e00 e01 e02 e03 e10 ...); Unity's indexer goes column by column.
+            // Read as columns, the translation landed in the bottom row: every bone bound at the origin, the people
+            // stuck in their T pose (the limbs had no direction to follow).
             var f = a.BindPoses[i]; var m = new Matrix4x4();
-            m.m00 = f[0]; m.m10 = f[1]; m.m20 = f[2]; m.m30 = f[3];
-            m.m01 = f[4]; m.m11 = f[5]; m.m21 = f[6]; m.m31 = f[7];
-            m.m02 = f[8]; m.m12 = f[9]; m.m22 = f[10]; m.m32 = f[11];
-            m.m03 = f[12]; m.m13 = f[13]; m.m23 = f[14]; m.m33 = f[15];
+            for (int row = 0; row < 4; row++) for (int col = 0; col < 4; col++) m[row + col * 4] = f[row * 4 + col];
             poses[i] = m;
         }
         mesh.bindposes = poses;

@@ -18,6 +18,7 @@ public class Plugin : BasePlugin
     internal static BepInEx.Configuration.ConfigEntry<bool> AutoHost, AutoJoin;
     internal static BepInEx.Configuration.ConfigEntry<string> LastHost;
     internal static BepInEx.Configuration.ConfigEntry<int> LoadSlot;
+    internal static BepInEx.Configuration.ConfigEntry<string> Skin;
 
     public override void Load()
     {
@@ -26,6 +27,7 @@ public class Plugin : BasePlugin
         MenuKey = Config.Bind("General", "MenuKey", UnityEngine.KeyCode.F8, "Opens the co-op panel.");
         ReportKey = Config.Bind("General", "ReportKey", UnityEngine.KeyCode.F9, "Bug report: a screenshot and the game state for every player, saved to BepInEx/coop-reports.");
         AutoHost = Config.Bind("Connect", "AutoHost", false, "Host as soon as the game starts.");
+        Skin = Config.Bind("Skins", "Skin", "", "How the other players see you: a person from the game (chosen in the pause menu's Skins window), empty = the mod's figure.");
         AutoJoin = Config.Bind("Connect", "AutoJoin", true, "Join LastHost automatically whenever that friend is hosting.");
         LastHost = Config.Bind("Connect", "LastHost", "", "SteamID of the friend joined last (set by the panel).");
         LoadSlot = Config.Bind("Connect", "LoadSlot", 0, "Save slot (1-3, as the game's menu shows them) to load from the main menu when hosting or joining automatically; 0 = choose yourself.");
@@ -52,6 +54,7 @@ public class Plugin : BasePlugin
         AddComponent<CoopMenu>();
         AddComponent<CoopScreen>();
         AddComponent<Reports>();
+        AddComponent<SkinsWindow>();
         Actions.Register(CoopRunner.Instance.World, harmony);
         if (Env.Get("CSCCOOP_TEST") == "report") Bot.PatchReportCounters(new Harmony(Guid + ".report"));
         if (Env.Get("CSCCOOP_TEST") == "stainprobe") new Harmony(Guid + ".probe").PatchAll(typeof(StainProbePatches));

@@ -26,7 +26,7 @@ public sealed class MeshArrays
     public string Name = ""; public int Vertices;
     public float[] Pos, Normal, Tangent, Uv0, Uv1;      // 3, 3, 4, 2, 2 floats per vertex (null if absent)
     public int[] BoneIndex; public float[] BoneWeight;   // 4 per vertex (null if not skinned)
-    public float[][] BindPoses;                         // 16 floats, column-major
+    public float[][] BindPoses;                         // 16 floats, row by row
     public int[][] SubMeshes; public bool Index32;
 }
 

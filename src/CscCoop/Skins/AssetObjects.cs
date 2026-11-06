@@ -76,7 +76,7 @@ public sealed class MeshData
 {
     public string Name = "";
     public List<SubMeshData> SubMeshes = new();
-    public List<float[]> BindPoses = new();          // 16 floats each, column-major (Unity's Matrix4x4f)
+    public List<float[]> BindPoses = new();          // 16 floats each, row by row (e00 e01 e02 e03 e10 ...)
     public uint[] BoneNameHashes = Array.Empty<uint>();
     public int IndexFormat;                          // 0 = 16 bit, 1 = 32 bit
     public byte[] IndexBuffer = Array.Empty<byte>();
