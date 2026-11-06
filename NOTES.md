@@ -531,7 +531,21 @@ victims' bodies" only on the host, a restart only on the host.
 - skinprobe (run-probe -Test skinprobe, first job): the 3 bodies (Girl02 Anim, DrugDealerAnim Variant, Girl01
   Ragdoll) are humanoids, 6-9 skinned meshes each (body, eyes, clothes, hair; URP Lit, one Lux URP hair shader), all 17
   bones mapped; three skinned figures walking, carrying and looking up/down render textured and posed (screenshots).
-  Not done yet: the skin choice, sending it to the others, loading bodies of other jobs.
+- Reading people from the game's files (owner's choice: no downloads, an own reader). Skins/AssetFile.cs reads the
+  serialized files (format 22, Unity 2021.3.45f2, little endian, no type trees): header, type table, object table,
+  externals. Skins/AssetObjects.cs: the release layouts of GameObject, Transform, SkinnedMeshRenderer, Mesh, Material
+  (2021.2+: keywords as valid/invalid lists) and Texture2D. tools/assetdump checks them outside the game: the dealer's
+  body mesh read from sharedassets3 has 9990 vertices and 142 bones, as the game reports. Skins/SkinFiles.cs finds the
+  people in a scene file (Animators with skinned meshes of 60+ bones), rebuilds the skeleton, decodes the vertex
+  streams (float/half/norm formats; weights and bone indices), loads textures as their raw compressed data (DXT1/DXT5/
+  BC7 from the .resS stream, largest mips skippable) and makes URP Lit materials. Most people use the game's blood
+  shader: its maps (_Base_Color, _Normal_Map, _MetalllicSmoothness, _Occlusion_Map, _Emmision_Map) go to URP Lit's
+  slots; the blood maps are left out. The humanoid bones by name (CC_Base_Hip, _Waist, _Spine01, _NeckTwist01, _Head,
+  _L/R_Upperarm, _Forearm, _Hand, _Thigh, _Calf, _Foot: what the bodies' humanoid Animators name).
+- skinprobe with CSCCOOP_SKIN_FILES=level6: in the first job, the Smart House son and mother built from level6 in
+  140-200 ms (7-9 meshes), textured and posed. Scene file numbers don't follow the build list one to one (level6
+  holds the Smart House people); level38 had none.
+  Not done yet: the catalog of all people, loading in the background, the Skins menu, sending the skin to the others.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

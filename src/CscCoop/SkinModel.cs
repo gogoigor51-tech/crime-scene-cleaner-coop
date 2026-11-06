@@ -37,7 +37,7 @@ public sealed class SkinModel
     readonly Vector3[] bindDir = new Vector3[Map.Length];
     readonly Vector3 hipsBind;
 
-    static GameObject shelf;   // an inactive parent: a copy made under it doesn't run Awake/OnEnable of the body's scripts
+    static GameObject shelf;
 
     SkinModel(GameObject root, string source, int meshes, int mapped, Vector3 hips)
     { Root = root; Source = source; Meshes = meshes; Mapped = mapped; hipsBind = hips; }
@@ -60,13 +60,36 @@ public sealed class SkinModel
         }
         if (paths[0] == null) { why = "no hips"; return null; }
 
-        if (shelf == null) { shelf = new GameObject("CoopSkinShelf"); shelf.SetActive(false); Object.DontDestroyOnLoad(shelf); }
-        var copy = Object.Instantiate(anim.gameObject, shelf.transform, false);
+        var copy = Object.Instantiate(anim.gameObject, Shelf, false);
         copy.name = "CoopSkin " + anim.gameObject.name;
         Strip(copy);
         var bones = new Transform[Map.Length];
         for (int k = 0; k < Map.Length; k++) bones[k] = paths[k] == null ? null : (paths[k] == "" ? copy.transform : copy.transform.Find(paths[k]));
+        return Bind(copy, bones, anim.gameObject.name, mapped, parent);
+    }
 
+    // An inactive parent: a copy made under it doesn't run Awake/OnEnable of the body's scripts.
+    public static Transform Shelf
+    {
+        get
+        {
+            if (shelf == null) { shelf = new GameObject("CoopSkinShelf"); shelf.SetActive(false); Object.DontDestroyOnLoad(shelf); }
+            return shelf.transform;
+        }
+    }
+
+    // A person built from the game's files (SkinFiles.Build): bones found by name.
+    public static SkinModel FromBuilt(GameObject built, Transform[] humanoid, string source, Transform parent)
+    {
+        int mapped = 0;
+        foreach (var t in humanoid) if (t != null) mapped++;
+        built.transform.SetParent(Shelf, false);
+        built.SetActive(true);   // active under the inactive shelf until placed
+        return Bind(built, humanoid, source, mapped, parent);
+    }
+
+    static SkinModel Bind(GameObject copy, Transform[] bones, string source, int mapped, Transform parent)
+    {
         // Bind pose: each skinned bone where its mesh was modelled around it.
         copy.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
         copy.transform.localScale = Vector3.one;
@@ -89,7 +112,7 @@ public sealed class SkinModel
                 bs[i].SetPositionAndRotation(m.GetColumn(3), m.rotation);
             }
         }
-        var model = new SkinModel(copy, anim.gameObject.name, meshes, mapped, bones[0].position);
+        var model = new SkinModel(copy, source, meshes, mapped, bones[0].position);
         for (int k = 0; k < Map.Length; k++)
         {
             var t = model.bone[k] = bones[k];

@@ -34,6 +34,13 @@ static class SkinProbe
                 var smrs = b.GetComponentsInChildren<SkinnedMeshRenderer>(true);
                 string meshes = "";
                 foreach (var s in smrs) meshes += $" {s.name}({(s.sharedMesh != null ? s.sharedMesh.vertexCount : 0)}v,{s.bones.Length}b,{(s.sharedMaterial != null && s.sharedMaterial.shader != null ? s.sharedMaterial.shader.name : "-")})";
+                if (anim != null && anim.isHuman)
+                {
+                    string map = "";
+                    foreach (HumanBodyBones hb in new[] { HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest, HumanBodyBones.Neck, HumanBodyBones.Head, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.RightUpperArm })
+                    { var t = anim.GetBoneTransform(hb); map += $" {hb}={(t != null ? t.name : "-")}"; }
+                    Plugin.L.LogInfo($"SKINPROBE map{map}");
+                }
                 Plugin.L.LogInfo($"SKINPROBE body '{b.name}' animator '{(anim != null ? anim.name : "-")}' human {(anim != null && anim.isHuman)} avatar {(anim?.avatar != null ? anim.avatar.name : "-")} meshes{meshes}");
                 if (n >= 3) continue;
                 var fig = new PlayerFigure((byte)(10 + n), Color.cyan);
@@ -43,6 +50,33 @@ static class SkinProbe
                 Plugin.L.LogInfo($"SKINPROBE   skin '{skin.Source}': {skin.Meshes} meshes, {skin.Mapped} of 17 bones mapped");
                 figs.Add(fig);
                 n++;
+            }
+            // CSCCOOP_SKIN_FILES=level38,level6: people built from other jobs' files instead (SkinFiles).
+            string files = Env.Get("CSCCOOP_SKIN_FILES");
+            if (files != "")
+            {
+                foreach (var fg in figs) fg.Destroy();
+                figs.Clear();
+                var set = new Skins.AssetSet(Skins.SkinFiles.DataDir);
+                var people = new List<Skins.SkinFiles.Person>();
+                foreach (var lv in files.Split(','))
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    var found = Skins.SkinFiles.FindPeople(set, lv);
+                    Plugin.L.LogInfo($"SKINPROBE {lv}: {found.Count} people in {sw.ElapsedMilliseconds} ms: {string.Join(", ", found.ConvertAll(x => $"{x.Name}({x.Meshes})"))}");
+                    people.AddRange(found.GetRange(0, Math.Min(found.Count, lv == files.Split(',')[0] ? 1 : 2)));
+                }
+                foreach (var person in people)
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    var fig = new PlayerFigure((byte)(20 + figs.Count), Color.cyan);
+                    var go = Skins.SkinFiles.Build(set, person, null, 1, out var hum, out var why);
+                    if (go == null) { Plugin.L.LogInfo($"SKINPROBE   {person.Name}: {why}"); fig.Destroy(); continue; }
+                    var skin = SkinModel.FromBuilt(go, hum, person.Name, fig.Root.transform);
+                    fig.SetSkin(skin);
+                    Plugin.L.LogInfo($"SKINPROBE   built '{person.Name}' from {person.File} in {sw.ElapsedMilliseconds} ms: {skin.Meshes} meshes, {skin.Mapped} of 17 bones");
+                    figs.Add(fig);
+                }
             }
             look = new GameObject("SkinProbeLook").transform;
             look.position = pt.position + pt.forward * 3f + Vector3.up * 1.0f;
