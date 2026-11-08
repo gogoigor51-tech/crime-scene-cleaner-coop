@@ -43,6 +43,7 @@ public static class SkinFiles
     public static GameObject Create(PersonData d, Transform parent, out Transform[] humanoid, out string why)
     {
         why = ""; humanoid = null;
+        EyeOpener.Apply(d);
         var nodes = new Transform[d.Nodes.Count];
         for (int i = 0; i < nodes.Length; i++)
         {

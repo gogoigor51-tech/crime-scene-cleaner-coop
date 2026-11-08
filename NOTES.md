@@ -615,6 +615,17 @@ victims' bodies" only on the host, a restart only on the host.
   - Close: the button now does what Esc does in the window: the window closes and the game's own Esc handler
     (UIPanelManager.OnEscapeClick) runs. State after it is the same as the game's own Esc pause (pause menu shown,
     1 open panel, timeScale 0). Opening the pause menu with PauseMenuController.Open had bypassed the panel manager.
+- Opened eyes (experiment, owner's request; Skins/EyeOpener.cs, Skins/Eyeballs.cs). On the body mesh, before it is
+  made, the eyelid shell in front of each eye bone (0.85-1.8 eyeball radii, an eyeball being a fifth of the eye
+  distance) is slid round the eyeball: the upper lid from the slit (-4 deg) to +26 deg, the lower to -16 deg, most in
+  the middle and less toward the corners and the outer shell; normals turned with it. Sliding alone only stretched
+  the skin (the lids share their meeting vertices), so the triangles joining an upper-lid vertex to a lower-lid one
+  are dropped: that is the opening. Behind it most people have no usable eyeball (no eye mesh, or one textured with
+  the body's skin or left untextured), so each eye gets a sphere made here with a painted eye (white, iris, pupil),
+  at the eye bone in bind pose, hung on the head bone; the game's eye meshes are hidden. skinfaults probe with
+  CSCCOOP_SKIN_FACES=1 (faces close up, without and with): DrugDealer, Girl01, SC Mother, Senator, Guest Geralt,
+  Amber all open, about 1000 lid vertices moved and 70-150 triangles cut each. Angles can be tried with
+  CSCCOOP_EYES=upper,lower,slit; mutants eyes-closed, eyes-stretched. Same iris for everyone; not seen by players.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

@@ -17,6 +17,7 @@ public sealed class SkinModel
     public readonly GameObject Root;
     public readonly string Source;
     public readonly int Meshes, Mapped;
+    public Transform HeadBone => bone[4];
 
     // Same order as PlayerFigure.Bones: hips, spine, chest, neck, head, upperArm L/R, foreArm L/R, hand L/R,
     // thigh L/R, shin L/R, foot L/R.
@@ -152,6 +153,7 @@ public sealed class SkinModel
                 copy.transform.position = normPos;
             }
         }
+        Skins.Eyeballs.Add(copy, bones[4]);
         var model = new SkinModel(copy, source, meshes, mapped, bones[0].position) { normRot = normRot, normPos = normPos };
         for (int k = 0; k < Map.Length; k++)
         {

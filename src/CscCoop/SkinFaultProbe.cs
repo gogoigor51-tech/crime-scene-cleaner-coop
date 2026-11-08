@@ -11,7 +11,11 @@ namespace CscCoop;
 // local/skinfault_<name>.png, with every renderer logged (bounds, materials, textures, missing bones).
 static class SkinFaultProbe
 {
-    static readonly string[] Names = { "PoolBoy new", "wife new", "Doctor Body Normal", "Doctor", "BigJim", "Pizza Italian2 Cts", "Husband new", "DrugDealer" };
+    // CSCCOOP_SKIN_FACES=1: the eyes experiment: faces close up, each person without and with EyeOpener.
+    static readonly bool faces = Env.Get("CSCCOOP_SKIN_FACES") == "1";
+    static readonly string[] Names = faces
+        ? new[] { "DrugDealer", "DrugDealer", "Girl01", "Girl01", "SC Mother", "SC Mother", "Senator", "Senator", "Guest Geralt", "Guest Geralt", "Amber", "Amber" }
+        : new[] { "PoolBoy new", "wife new", "Doctor Body Normal", "Doctor", "BigJim", "Pizza Italian2 Cts", "Husband new", "DrugDealer" };
     static int step, index;
     static float at;
     static SkinLoader loader;
@@ -25,10 +29,12 @@ static class SkinFaultProbe
         if (step == 0) { SkinCatalog.Load(); step = 1; return; }
         if (step == 1 && SkinCatalog.Ready)
         {
-            loader = new SkinLoader(3, () =>
+            SkinPreview.Face = faces;
+            loader = new SkinLoader(faces ? 0 : 3, () =>
             {
                 if (current != null || index >= Names.Length) return null;
                 current = SkinCatalog.People.FirstOrDefault(p => p.Display == Names[index]);
+                if (faces) EyeOpener.Enabled = index % 2 == 1;   // even: as the game has them, odd: opened
                 if (current == null) { Plugin.L.LogInfo($"SKINFAULT '{Names[index]}' not in the catalog"); index++; }
                 return current;
             }, Loaded);
@@ -52,7 +58,8 @@ static class SkinFaultProbe
             string m = string.Join(" | ", mats.Select(x => x == null ? "null" : $"{x.name} base {(x.HasProperty("_BaseMap") && x.GetTexture("_BaseMap") != null ? x.GetTexture("_BaseMap").width.ToString() : "none")} col {(x.HasProperty("_BaseColor") ? x.GetColor("_BaseColor").ToString() : "-")} q {x.renderQueue}"));
             Plugin.L.LogInfo($"SKINFAULT '{p.Display}' renderer '{smr.name}' active {smr.gameObject.activeInHierarchy} enabled {smr.enabled} mesh {(smr.sharedMesh != null ? smr.sharedMesh.vertexCount : -1)} null bones {smr.bones.Count(b => b == null)}/{smr.bones.Length} root '{(smr.rootBone != null ? smr.rootBone.name : "-")}' mats {m}");
         }
-        var name = p.Display;
+        var name = p.Display + (faces ? (index % 2 == 1 ? "_open" : "_closed") : "");
+        if (faces) Plugin.L.LogInfo($"SKINFAULT '{name}': {EyeOpener.LastMoved} eyelid vertices moved, {EyeOpener.LastCut} triangles cut");
         SkinPreview.Render(p, go, hum, rt =>
         {
             if (rt != null)
@@ -62,7 +69,7 @@ static class SkinFaultProbe
                 tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0); tex.Apply();
                 RenderTexture.active = prev;
                 string dir = Env.Get("CSCCOOP_SHOT_DIR");
-                if (dir != "") File.WriteAllBytes(Path.Combine(dir, "skinfault_" + name.Replace(' ', '_') + ".png"), ImageConversion.EncodeToPNG(tex).ToArray());
+                if (dir != "") File.WriteAllBytes(Path.Combine(dir, (faces ? "skinface_" : "skinfault_") + name.Replace(' ', '_') + ".png"), ImageConversion.EncodeToPNG(tex).ToArray());
             }
             Plugin.L.LogInfo($"SKINFAULT '{name}' picture {(rt != null)}");
             current = null; index++;

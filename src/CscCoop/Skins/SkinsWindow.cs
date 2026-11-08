@@ -293,6 +293,7 @@ public static class SkinPreview
     static PlayerFigure fig;
     static Action<RenderTexture> current;
     static int frames;
+    public static bool Face;   // tests: a close-up of the face instead of the whole body
 
     public static void Render(Person p, GameObject go, Transform[] hum, Action<RenderTexture> done) => queue.Enqueue((p, go, hum, done));
 
@@ -309,6 +310,8 @@ public static class SkinPreview
                     Plugin.L.LogInfo(System.FormattableString.Invariant($"SKINFAULT render '{fig.Skin.Source}' '{smr.name}' bounds at {rel.x:F2},{rel.y:F2},{rel.z:F2} size {bd.size.x:F2},{bd.size.y:F2},{bd.size.z:F2} root scale {smr.transform.lossyScale.x:F3} active {smr.gameObject.activeInHierarchy}"));
                 }
             // A job's loading unloads unused assets; these pictures are referenced only from managed code.
+            if (Face && fig.Skin?.HeadBone != null) { cam.transform.position = fig.Skin.HeadBone.position + new Vector3(0, 0.075f, -0.3f); cam.transform.rotation = Quaternion.identity; }
+            else { cam.transform.localPosition = new Vector3(0, 0.95f, -3.6f); cam.transform.localRotation = Quaternion.identity; }
             var rt = new RenderTexture(256, 352, 24) { name = "CoopSkinPreview", hideFlags = Env.Get("CSCCOOP_MUTANT") == "skins-lost" ? HideFlags.None : HideFlags.DontUnloadUnusedAsset };
             cam.targetTexture = rt;
             RenderTexture result = rt;
