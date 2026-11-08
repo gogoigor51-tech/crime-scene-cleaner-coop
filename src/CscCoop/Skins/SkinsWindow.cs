@@ -112,8 +112,17 @@ public class SkinsWindow : MonoBehaviour
         Plugin.L.LogInfo("COOP skins window opened");
     }
 
-    // Back to the pause menu it was opened from (owner's test: with the window closed and the menu gone, the game was
-    // half paused until the menu was opened and closed again).
+    // The Close button does what Esc does in this window (owner's request): Esc closes the window here, and the game's
+    // own Esc handler (UIPanelManager.OnEscapeClick) then runs as for any Esc. The button calls that handler itself.
+    // (Opening the pause menu with PauseMenuController.Open left the game half paused: menu shown, camera moving.)
+    public void CloseLikeEscape()
+    {
+        Close();
+        if (Env.Get("CSCCOOP_MUTANT") == "skins-close-old") { var pm = Object.FindObjectOfType<PauseMenuController>(true); if (pm != null && !pm.gameObject.activeInHierarchy) pm.Open(); return; }
+        var mgr = Object.FindObjectOfType<UIPanelManager>();
+        if (mgr != null) mgr.OnEscapeClick();
+    }
+
     public void Close()
     {
         if (!IsOpen) return;
@@ -123,8 +132,6 @@ public class SkinsWindow : MonoBehaviour
         var player = CoopRunner.Instance?.World?.Player;
         if (blockedPlayer && player != null) player.Unlock();
         blockedPlayer = false;
-        var pause = Object.FindObjectOfType<PauseMenuController>(true);
-        if (pause != null && !pause.gameObject.activeInHierarchy && Env.Get("CSCCOOP_MUTANT") != "skins-close-old") pause.Open();
         Plugin.L.LogInfo($"COOP skins window closed ({previews.Count} pictures made)");
     }
 
@@ -171,7 +178,7 @@ public class SkinsWindow : MonoBehaviour
         GUILayout.BeginHorizontal();
         GUILayout.Label(T("Скины", "Skins"), title);
         GUILayout.FlexibleSpace();
-        if (GUILayout.Button(T("Закрыть", "Close"), GUILayout.Width(140), GUILayout.Height(36))) Close();
+        if (GUILayout.Button(T("Закрыть", "Close"), GUILayout.Width(140), GUILayout.Height(36))) CloseLikeEscape();
         GUILayout.EndHorizontal();
         var ppl = SkinCatalog.People;
         string chosen = Plugin.Skin.Value;
@@ -295,6 +302,12 @@ public static class SkinPreview
         {
             fig.Pose(studio.position, 180, 0, PlayerFigure.Carry.None, CoopCore.PlayerPose.ToolNone, Vector3.zero, Quaternion.identity, 1, false, 0.02f);
             if (++frames < 10) return;
+            if (Env.Get("CSCCOOP_TEST") == "skinfaults" && fig.Skin != null)
+                foreach (var smr in fig.Skin.Root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    var bd = smr.bounds; var rel = bd.center - studio.position;
+                    Plugin.L.LogInfo(System.FormattableString.Invariant($"SKINFAULT render '{fig.Skin.Source}' '{smr.name}' bounds at {rel.x:F2},{rel.y:F2},{rel.z:F2} size {bd.size.x:F2},{bd.size.y:F2},{bd.size.z:F2} root scale {smr.transform.lossyScale.x:F3} active {smr.gameObject.activeInHierarchy}"));
+                }
             // A job's loading unloads unused assets; these pictures are referenced only from managed code.
             var rt = new RenderTexture(256, 352, 24) { name = "CoopSkinPreview", hideFlags = Env.Get("CSCCOOP_MUTANT") == "skins-lost" ? HideFlags.None : HideFlags.DontUnloadUnusedAsset };
             cam.targetTexture = rt;

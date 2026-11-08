@@ -65,6 +65,7 @@ public static class PersonReader
             int meshes = 0;
             var keys = new List<string>();
             string bodyMaterial = "";
+            bool textured = false;
             foreach (var (smrGo, smr) in SkinnedUnder(f, goPtr.Id))
             {
                 if (smr.Bones.Count < 60 || !smr.Enabled) continue;
@@ -76,10 +77,13 @@ public static class PersonReader
                     var matf = set.Resolve(f, mp);
                     if (matf == null) continue;
                     keys.Add(Path.GetFileName(matf.FilePath) + ":" + mp.Id);
-                    if (bodyMaterial == "" && smrGo.StartsWith("CC_Base_Body", StringComparison.Ordinal)) bodyMaterial = MaterialData.Read(matf.Read(mp.Id)).Name;
+                    var md = MaterialData.Read(matf.Read(mp.Id));
+                    foreach (var t in md.Textures.Values) if (!t.tex.IsNull) { textured = true; break; }
+                    if (bodyMaterial == "" && smrGo.StartsWith("CC_Base_Body", StringComparison.Ordinal)) bodyMaterial = md.Name;
                 }
             }
-            if (meshes == 0) continue;
+            // Untextured copies (a cinematic test scene's "BigJim", a second "Pizza Italian2 Cts": all white).
+            if (meshes == 0 || !textured) continue;
             keys.Sort(StringComparer.Ordinal);
             // Act II roots are mostly "RagdollBase": the body's material names them ("Guest_Geralt_Body").
             string name = go.Name;

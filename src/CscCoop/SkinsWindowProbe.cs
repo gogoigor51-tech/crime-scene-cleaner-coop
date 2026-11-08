@@ -28,8 +28,12 @@ static class SkinsWindowProbe
         {
             case 0:
                 SkinCatalog.Load();
-                Object.FindObjectOfType<PauseMenuController>(true)?.Open();
-                step = 1; at = now + 2; break;
+                Object.FindObjectOfType<UIPanelManager>()?.OnEscapeClick();   // Esc: the game's pause menu
+                step = 101; at = now + 2; break;
+            case 101:
+                { var pm = Object.FindObjectOfType<PauseMenuController>(true); var mg = Object.FindObjectOfType<UIPanelManager>();
+                  Plugin.L.LogInfo($"SKINSWIN pause by Esc: pause menu shown {(pm != null && pm.gameObject.activeInHierarchy)}, open panels {(mg?.OpenedPanels != null ? mg.OpenedPanels.Count : -1)}, timeScale {Time.timeScale}, player can move {(w.Player != null && w.Player.CanMove)}"); }
+                step = 1; break;
             case 1:
                 Plugin.L.LogInfo($"SKINSWIN pressed the Skins item: {win.PressMenuButton()}, window open {win.IsOpen}");
                 step = 2; at = now + 8; break;
@@ -79,11 +83,12 @@ static class SkinsWindowProbe
             case 10:
                 Plugin.L.LogInfo($"SKINSWIN all rows: {win.LivePreviews} pictures, {win.FailedCount} failed: {win.FailedNames}");
                 win.Choose(null);
-                win.Close();
+                win.CloseLikeEscape();
                 step = 11; at = now + 2; break;
             case 11:
                 var pause = Object.FindObjectOfType<PauseMenuController>(true);
-                Plugin.L.LogInfo($"SKINSWIN after Close: window open {win.IsOpen}, pause menu shown {(pause != null && pause.gameObject.activeInHierarchy)}");
+                var mgr = Object.FindObjectOfType<UIPanelManager>();
+                Plugin.L.LogInfo($"SKINSWIN after Close: window open {win.IsOpen}, pause menu shown {(pause != null && pause.gameObject.activeInHierarchy)}, open panels {(mgr != null && mgr.OpenedPanels != null ? mgr.OpenedPanels.Count : -1)}, timeScale {Time.timeScale}, player can move {(w.Player != null && w.Player.CanMove)}");
                 Shot("shot_skins_closed.png");
                 Plugin.L.LogInfo("SKINSWIN done");
                 step = 12; at = now + 2; break;

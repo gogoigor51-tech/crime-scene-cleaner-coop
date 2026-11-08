@@ -36,6 +36,7 @@ public sealed class SkinModel
     readonly Quaternion[] bindLocal = new Quaternion[Map.Length];
     readonly Vector3[] bindDir = new Vector3[Map.Length];
     readonly Vector3 hipsBind;
+    Quaternion normRot = Quaternion.identity; Vector3 normPos;   // the copy's placement under the figure
 
     static GameObject shelf;
 
@@ -129,7 +130,29 @@ public sealed class SkinModel
             if (bones[end] != null && bones[limb] != null && bones[end].parent != bones[limb] && Env.Get("CSCCOOP_MUTANT") != "skin-ik")
                 bones[end].SetParent(bones[limb], true);
         }
-        var model = new SkinModel(copy, source, meshes, mapped, bones[0].position);
+        // Upright, centred, feet on the ground. Some people's skeletons bind lying down (Z-up exports: "PoolBoy new",
+        // "wife new") or far from the origin ("Doctor": 27 m away and half a metre under the floor), which left their
+        // cells and their figure empty (owner's test of 0.4.4-test2). The copy's root is turned so hips -> head is up and
+        // the left thigh -> the right thigh is +x (facing +z), then moved so the hips are over the origin and the ankles
+        // at the figure's ankle height; the copy keeps this placement under the figure (Apply works in that space).
+        Quaternion normRot = Quaternion.identity; Vector3 normPos = Vector3.zero;
+        if (bones[0] != null && bones[4] != null && bones[11] != null && bones[12] != null && Env.Get("CSCCOOP_MUTANT") != "skin-unplaced")
+        {
+            var up = (bones[4].position - bones[0].position).normalized;
+            var right = bones[12].position - bones[11].position;
+            right = (right - up * Vector3.Dot(right, up)).normalized;
+            if (up.sqrMagnitude > 0.5f && right.sqrMagnitude > 0.5f)
+            {
+                normRot = Quaternion.Inverse(Quaternion.LookRotation(Vector3.Cross(right, up), up));
+                copy.transform.rotation = normRot;
+                float foot = Mathf.Min(bones[15] != null ? bones[15].position.y : 0, bones[16] != null ? bones[16].position.y : 0);
+                if (bones[15] == null && bones[16] == null) foot = bones[0].position.y - 0.88f;
+                var hip = bones[0].position;
+                normPos = new Vector3(-hip.x, 0.095f - foot, -hip.z);
+                copy.transform.position = normPos;
+            }
+        }
+        var model = new SkinModel(copy, source, meshes, mapped, bones[0].position) { normRot = normRot, normPos = normPos };
         for (int k = 0; k < Map.Length; k++)
         {
             var t = model.bone[k] = bones[k];
@@ -139,7 +162,7 @@ public sealed class SkinModel
             if (c >= 0 && bones[c] != null) model.bindDir[k] = (bones[c].position - t.position).normalized;
         }
         copy.transform.SetParent(parent, false);
-        copy.transform.localPosition = Vector3.zero; copy.transform.localRotation = Quaternion.identity;
+        copy.transform.localPosition = normPos; copy.transform.localRotation = normRot;
         return model;
     }
 

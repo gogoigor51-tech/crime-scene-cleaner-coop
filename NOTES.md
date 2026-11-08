@@ -605,6 +605,16 @@ victims' bodies" only on the host, a restart only on the host.
   - Big preview (SkinShowcase): the chosen person (textures at half size) in a studio of its own 100 m from the cells'
     one, rendered every frame while the window is open into a 512x704 picture beside the table; drag turns it, the
     wheel brings the camera to the face (screenshots: DrugDealer's face, Pizza Italian2 Cts's arms, Husband new).
+- Owner's test of 0.4.4-test2 (skinfaults probe: each person rendered as a cell is and saved as a picture):
+  - Empty cells ("PoolBoy new", "wife new", "Doctor", "Doctor Body Normal"): they loaded but stood out of view: two
+    bind lying down (Z-up skeletons), the Doctors 27 m off and 0.5 m under the floor. SkinModel now turns the copy so
+    hips -> head is up and left thigh -> right thigh is +x, and moves it so the hips are over the origin and the ankles
+    at 0.095 m; the copy keeps that placement under the figure. All four render upright (mutant skin-unplaced).
+  - White "BigJim" and one of two "Pizza Italian2 Cts": copies with untextured materials (a cinematic scene's merged
+    materials). People with no texture at all are left out of the catalog (now 140; catalog file v2, rescanned).
+  - Close: the button now does what Esc does in the window: the window closes and the game's own Esc handler
+    (UIPanelManager.OnEscapeClick) runs. State after it is the same as the game's own Esc pause (pause menu shown,
+    1 open panel, timeScale 0). Opening the pause menu with PauseMenuController.Open had bypassed the panel manager.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

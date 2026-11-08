@@ -5,6 +5,37 @@ using CscCoop.Skins;
 // Lists the skinned meshes in a scene file: their game object, mesh (with where its data is) and materials' textures.
 var missingSeen = new System.Collections.Generic.HashSet<string>();
 var dir = args[0]; var level = args[1]; var filter = args.Length > 2 ? args[2] : "";
+if (level == "person")
+{
+    // One person as the skins read it: meshes (vertex channels), materials (texture slots, formats).
+    var p = PersonReader.Catalog(dir).Find(x => x.Display == filter);
+    var ps = new AssetSet(dir);
+    var d = PersonReader.Read(ps, p, 3);
+    Console.WriteLine($"{p.Display} {p.Key}: {d.Meshes.Count} meshes, {d.Materials.Count} materials, {d.Textures.Count} textures");
+    foreach (var m in d.Meshes) Console.WriteLine($"  mesh {m.Name}: {m.Vertices} v, pos {(m.Pos != null)} uv {(m.Uv0 != null)} weights {(m.BoneWeight != null)} subs {m.SubMeshes.Length} first pos {(m.Pos != null && m.Pos.Length > 2 ? $"{m.Pos[0]:F2},{m.Pos[1]:F2},{m.Pos[2]:F2}" : "-")} wsum0 {(m.BoneWeight != null ? m.BoneWeight[0] + m.BoneWeight[1] + m.BoneWeight[2] + m.BoneWeight[3] : 0):F2}");
+    foreach (var mt in d.Materials) Console.WriteLine($"  mat {mt.Name} kw '{mt.Keywords}' q {mt.RenderQueue}: {string.Join("; ", mt.Textures.Select(t => $"{t.prop}={d.Textures[t.tex].Name} {d.Textures[t.tex].Width}x{d.Textures[t.tex].Height} fmt{d.Textures[t.tex].Format}"))}");
+    // the raw material slot names too
+    var pf = ps.Get(p.File);
+    var stack = new System.Collections.Generic.Stack<long>(); stack.Push(p.Root);
+    var seenMats = new System.Collections.Generic.HashSet<long>();
+    while (stack.Count > 0)
+    {
+        var g = GameObjectData.Read(pf.Read(stack.Pop()));
+        foreach (var c in g.Components)
+        {
+            if (c.File != 0 || !pf.Objects.TryGetValue(c.Id, out var o)) continue;
+            if (o.ClassId == ClassId.Transform) { foreach (var ch in TransformData.Read(pf.Read(c.Id)).Children) if (ch.File == 0 && pf.Objects.ContainsKey(ch.Id)) stack.Push(TransformData.Read(pf.Read(ch.Id)).GameObject.Id); }
+            if (o.ClassId != ClassId.SkinnedMeshRenderer) continue;
+            foreach (var mp in SkinnedRendererData.Read(pf.Read(c.Id)).Materials)
+            {
+                var mf = ps.Resolve(pf, mp); if (mf == null || !seenMats.Add(mp.Id)) continue;
+                var md = MaterialData.Read(mf.Read(mp.Id));
+                Console.WriteLine($"  raw {md.Name} shader {md.Shader}: {string.Join(", ", md.Textures.Where(kv => !kv.Value.tex.IsNull).Select(kv => kv.Key))} | colors {string.Join(",", md.Colors.Keys)}");
+            }
+        }
+    }
+    return;
+}
 if (level == "shapes")
 {
     // Which people's meshes keep blend shapes (names with Eye/Blink), and the bones their renderers miss.

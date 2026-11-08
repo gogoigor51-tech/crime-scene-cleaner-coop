@@ -57,7 +57,7 @@ public static class SkinCatalog
             var p = Path.Combine(dir, "level" + n);
             if (File.Exists(p)) h = h * 31 + new FileInfo(p).Length;
         }
-        return "v1 " + h;
+        return "v2 " + h;   // v2: untextured people left out
     }
 
     public static Person Find(string key) => People?.FirstOrDefault(p => p.Key == key);
