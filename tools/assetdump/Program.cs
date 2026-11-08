@@ -3,7 +3,96 @@ using System.Linq;
 using CscCoop.Skins;
 
 // Lists the skinned meshes in a scene file: their game object, mesh (with where its data is) and materials' textures.
+var missingSeen = new System.Collections.Generic.HashSet<string>();
 var dir = args[0]; var level = args[1]; var filter = args.Length > 2 ? args[2] : "";
+if (level == "shapes")
+{
+    // Which people's meshes keep blend shapes (names with Eye/Blink), and the bones their renderers miss.
+    foreach (var p in PersonReader.Catalog(dir))
+    {
+        var ss = new AssetSet(dir);
+        var pf = ss.Get(p.File);
+        var names = new System.Collections.Generic.List<string>();
+        int shapes = 0;
+        var stack = new System.Collections.Generic.Stack<long>(); stack.Push(p.Root);
+        while (stack.Count > 0)
+        {
+            var g = GameObjectData.Read(pf.Read(stack.Pop()));
+            foreach (var c in g.Components)
+            {
+                if (c.File != 0 || !pf.Objects.TryGetValue(c.Id, out var o)) continue;
+                if (o.ClassId == ClassId.Transform) { foreach (var ch in TransformData.Read(pf.Read(c.Id)).Children) if (ch.File == 0 && pf.Objects.ContainsKey(ch.Id)) stack.Push(TransformData.Read(pf.Read(ch.Id)).GameObject.Id); }
+                if (o.ClassId != ClassId.SkinnedMeshRenderer) continue;
+                var sr = SkinnedRendererData.Read(pf.Read(c.Id));
+                foreach (var b in sr.Bones)
+                    if (b.File == 0 && pf.Objects.ContainsKey(b.Id)) { var bt = TransformData.Read(pf.Read(b.Id)); var bg = GameObjectData.Read(pf.Read(bt.GameObject.Id)); if (!missingSeen.Contains(bg.Name) && p.Display == filter) { } }
+                    else if (p.Display == filter) Console.WriteLine($"   bone outside: {b}");
+                var mf = ss.Resolve(pf, sr.Mesh); if (mf == null) continue;
+                var md = MeshData.Read(mf.Read(sr.Mesh.Id));
+                shapes += md.BlendNames.Count;
+                names.AddRange(md.BlendNames.Where(n => n.Contains("Eye") || n.Contains("Blink")));
+            }
+        }
+        if (shapes > 0) Console.WriteLine($"{p.Display}: {shapes} shapes; eye: {string.Join(", ", names.Take(8))}");
+        ss.Close();
+    }
+    return;
+}
+if (level == "nodes")
+{
+    // Node names of one person (filter = display name), with which are skinned, and the body mesh's blend shape counts.
+    var people = PersonReader.Catalog(dir);
+    var p = people.Find(x => x.Display == filter);
+    var ns = new AssetSet(dir);
+    var d = PersonReader.Read(ns, p, 3);
+    var used = new System.Collections.Generic.HashSet<int>();
+    foreach (var r in d.Renderers) foreach (var b in r.Bones) if (b >= 0) used.Add(b);
+    Console.WriteLine(string.Join(" ", d.Nodes.Select((n, i) => (used.Contains(i) ? "*" : "") + n.Name).Take(90)));
+    foreach (var r in d.Renderers) Console.WriteLine($"  renderer on '{d.Nodes[r.Node].Name}' mesh '{d.Meshes[r.Mesh].Name}' bones {r.Bones.Length} missing {r.Bones.Count(b => b < 0)} root '{(r.RootBone >= 0 ? d.Nodes[r.RootBone].Name : "-")}'");
+    return;
+}
+if (level == "readall")
+{
+    // Every person read as the skins window reads them: what fails and why; blend shapes on the body and eyes.
+    var people = PersonReader.Catalog(dir);
+    int ok = 0;
+    foreach (var p in people)
+    {
+        var rs = new AssetSet(dir);
+        try
+        {
+            var d = PersonReader.Read(rs, p, 3);
+            if (d == null) { Console.WriteLine($"FAIL {p.Display} ({p.Key}): no renderers read"); continue; }
+            var used = new System.Collections.Generic.HashSet<int>();
+            foreach (var r in d.Renderers) foreach (var b in r.Bones) if (b >= 0) used.Add(b);
+            int hips = d.Nodes.FindIndex(n => n.Name == "CC_Base_Hip");
+            bool hipSkinned = d.Nodes.Select((n, i) => (n, i)).Any(x => x.n.Name == "CC_Base_Hip" && used.Contains(x.i));
+            int missingBones = d.Renderers.Sum(r => r.Bones.Count(b => b < 0));
+            int missingMats = d.Renderers.Sum(r => r.Materials.Count(m => m < 0));
+            var why = hips < 0 ? "no CC_Base_Hip" : !hipSkinned ? "hip not skinned" : "";
+            if (why != "" || missingBones > 0 || missingMats > 0) Console.WriteLine($"ODD  {p.Display} ({p.Key}): {why} missing bones {missingBones}, missing materials {missingMats}, renderers {d.Renderers.Count}, nodes {d.Nodes.Count}");
+            else ok++;
+            if (filter != "" && p.Display.Contains(filter))
+            {
+                var pf = rs.Get(p.File);
+                foreach (var id in pf.OfClass(ClassId.SkinnedMeshRenderer))
+                {
+                    var sr = SkinnedRendererData.Read(pf.Read(id));
+                    var gobj = GameObjectData.Read(pf.Read(sr.GameObject.Id));
+                    if (!d.Nodes.Any(n => n.Name == gobj.Name)) continue;
+                    var mf = rs.Resolve(pf, sr.Mesh); if (mf == null) continue;
+                    var md = MeshData.Read(mf.Read(sr.Mesh.Id));
+                    var nz = md.BlendNames.Select((n, i) => (n, w: i < sr.BlendWeights.Length ? sr.BlendWeights[i] : 0)).Where(x => x.w != 0 || x.n.Contains("Eye") || x.n.Contains("Blink")).Take(12);
+                    Console.WriteLine($"   {gobj.Name}: {md.BlendNames.Count} shapes, weights {sr.BlendWeights.Length}: {string.Join(", ", nz.Select(x => $"{x.n}={x.w:F0}"))}");
+                }
+            }
+        }
+        catch (Exception e) { Console.WriteLine($"FAIL {p.Display} ({p.Key}): {e.GetType().Name} {e.Message}"); }
+        finally { rs.Close(); }
+    }
+    Console.WriteLine($"{ok} of {people.Count} read cleanly");
+    return;
+}
 if (level == "catalog")
 {
     var sw = System.Diagnostics.Stopwatch.StartNew();

@@ -584,6 +584,27 @@ victims' bodies" only on the host, a restart only on the host.
   11/11, flashlight 8/8, toolcarry 7/7 after these changes.
   Not tested by players yet. Open: walking and poses come from the mod's simple figure; a held tool can sit a few cm
   off the person's hand (proportions differ); the window's list may hold people the owner wants out.
+- Owner's test of 0.4.4-test (2026-11-08):
+  - Pictures empty after going into a job, never made again: loading a scene unloads unused assets, and the
+    pictures (RenderTextures) are referenced only from managed code. They (and the showcase picture and the window's
+    background textures) are DontUnloadUnusedAsset now, and a picture found gone is dropped and made again. skinswindow
+    probe with Resources.UnloadUnusedAssets(): 5 of 5 alive; mutant skins-lost: 0 of 5, none made again.
+  - "Couldn't load": 9 of 142 people read oddly (tools/assetdump readall). 5 (Tyler's apartment: Daughter, Husband,
+    PoolBoy, wife, Gamerson "new") are on an Unreal-style rig (root, pelvis, spine_01..., upperarm_l...): no
+    CC_Base_Hip, so they failed. Their names are a second table now (SkinFiles.UeBones). The other 4 (OldGuy Writer,
+    OldGuy Security, Lady, Lady Body 02) have 3 empty bone slots per renderer in the game's own data: harmless. Probe,
+    every row scrolled: 142 pictures, 0 failed.
+  - "Pizza Italian2 Cts" (a cutscene version) had broken arms: its hands and feet hang under IK targets (IKHand_L,
+    IKHeel_L...), not under the forearms and calves, so turning an arm left the hand behind. In bind pose the hands
+    and feet go under their limb (SkinModel; mutant skin-ik).
+  - Closed eyes: the people are bodies, and almost all meshes (133 of 142) keep no blend shapes in the build: the
+    closed eyelids are in the mesh itself, with nothing in the files to open them. Only the 9 cutscene people keep
+    their face shapes (Eye_Blink_L/R, Eye_Wide...); built without them they show the mesh's own face. Not fixed.
+  - The window's Close now opens the pause menu again (it had been closed to open the window; without it the game
+    stayed half paused). Probe: pause menu shown after Close.
+  - Big preview (SkinShowcase): the chosen person (textures at half size) in a studio of its own 100 m from the cells'
+    one, rendered every frame while the window is open into a 512x704 picture beside the table; drag turns it, the
+    wheel brings the camera to the face (screenshots: DrugDealer's face, Pizza Italian2 Cts's arms, Husband new).
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

@@ -44,6 +44,7 @@ public sealed class TransformData
 public sealed class SkinnedRendererData
 {
     public PPtr GameObject, Mesh, RootBone; public bool Enabled; public List<PPtr> Materials = new(), Bones = new();
+    public float[] BlendWeights = System.Array.Empty<float>();
     public static SkinnedRendererData Read(Reader r)
     {
         var s = new SkinnedRendererData { GameObject = r.Ptr() };
@@ -63,7 +64,7 @@ public sealed class SkinnedRendererData
         s.Mesh = r.Ptr();
         int b = r.I32();
         for (int i = 0; i < b; i++) s.Bones.Add(r.Ptr());
-        int w = r.I32(); r.Skip(w * 4); // blend shape weights
+        int w = r.I32(); s.BlendWeights = r.Floats(w);   // blend shape weights
         s.RootBone = r.Ptr();
         return s;
     }
@@ -76,6 +77,7 @@ public sealed class MeshData
 {
     public string Name = "";
     public List<SubMeshData> SubMeshes = new();
+    public List<string> BlendNames = new();
     public List<float[]> BindPoses = new();          // 16 floats each, row by row (e00 e01 e02 e03 e10 ...)
     public uint[] BoneNameHashes = Array.Empty<uint>();
     public int IndexFormat;                          // 0 = 16 bit, 1 = 32 bit
@@ -99,7 +101,7 @@ public sealed class MeshData
         // blend shapes: vertices (40 bytes), shapes (12), channels (name, hash, frame index, frame count), full weights
         int bv = r.I32(); r.Skip(bv * 40);
         int bs = r.I32(); r.Skip(bs * 12);
-        int bc = r.I32(); for (int i = 0; i < bc; i++) { r.Str(); r.U32(); r.I32(); r.I32(); }
+        int bc = r.I32(); for (int i = 0; i < bc; i++) { m.BlendNames.Add(r.Str()); r.U32(); r.I32(); r.I32(); }
         int fw = r.I32(); r.Skip(fw * 4);
         int bp = r.I32();
         for (int i = 0; i < bp; i++) m.BindPoses.Add(r.Floats(16));

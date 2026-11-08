@@ -120,6 +120,15 @@ public sealed class SkinModel
                 bs[i].SetPositionAndRotation(m.GetColumn(3), m.rotation);
             }
         }
+        // Cutscene rigs (e.g. "Pizza Italian2 Cts") hold the hands and feet under IK targets, not under the forearms
+        // and calves, so turning an arm left its hand behind (owner's test: broken arms). Once in bind pose they go
+        // under their limb, keeping where they are.
+        for (int k = 0; k < 4; k++)
+        {
+            int end = new[] { 9, 10, 15, 16 }[k], limb = new[] { 7, 8, 13, 14 }[k];
+            if (bones[end] != null && bones[limb] != null && bones[end].parent != bones[limb] && Env.Get("CSCCOOP_MUTANT") != "skin-ik")
+                bones[end].SetParent(bones[limb], true);
+        }
         var model = new SkinModel(copy, source, meshes, mapped, bones[0].position);
         for (int k = 0; k < Map.Length; k++)
         {

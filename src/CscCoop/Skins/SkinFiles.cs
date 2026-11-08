@@ -18,6 +18,15 @@ public static class SkinFiles
         "CC_Base_L_Thigh", "CC_Base_R_Thigh", "CC_Base_L_Calf", "CC_Base_R_Calf", "CC_Base_L_Foot", "CC_Base_R_Foot",
     };
 
+    // A few people (Tyler's apartment: Daughter, Husband, PoolBoy, wife, Gamerson) are on an Unreal-style rig instead
+    // (root/pelvis/spine_01..., upperarm_l...): they "couldn't load" (no CC_Base_Hip) until these names were known.
+    public static readonly string[] UeBones =
+    {
+        "pelvis", "spine_01", "spine_02", "neck_01", "head",
+        "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "hand_l", "hand_r",
+        "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r",
+    };
+
     static string dataDir;
     public static string DataDir => dataDir ??= Application.dataPath;   // ...\CrimeCleaner_Data
 
@@ -76,13 +85,17 @@ public static class SkinFiles
         for (int k = 0; k < CcBones.Length; k++)
         {
             int pick = -1, seen = 0;
-            for (int i = 0; i < nodes.Length; i++)
-                if (d.Nodes[i].Name == CcBones[k]) { seen++; if (pick < 0 || (used.Contains(i) && !used.Contains(pick))) pick = i; }
+            foreach (var name in new[] { CcBones[k], UeBones[k] })
+            {
+                for (int i = 0; i < nodes.Length; i++)
+                    if (d.Nodes[i].Name == name) { seen++; if (pick < 0 || (used.Contains(i) && !used.Contains(pick))) pick = i; }
+                if (pick >= 0) break;
+            }
             if (seen > 1) dupes++;
             humanoid[k] = pick >= 0 ? nodes[pick] : null;
         }
         if (dupes > 0) Plugin.L.LogInfo($"COOP skin '{d.Person?.Display}': {dupes} humanoid bone names twice, took the skinned ones");
-        if (humanoid[0] == null) { why = "no CC_Base_Hip"; Destroy(nodes[0].gameObject); return null; }
+        if (humanoid[0] == null) { why = "no hips (CC_Base_Hip or pelvis)"; Destroy(nodes[0].gameObject); return null; }
         return nodes[0].gameObject;
     }
 

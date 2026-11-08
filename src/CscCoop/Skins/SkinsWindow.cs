@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CscCoop.Skins;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -50,6 +51,7 @@ public class SkinsWindow : MonoBehaviour
         if (IsOpen)
         {
             loader?.Tick();
+            SkinShowcase.Tick();
             Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
             if (Input.GetKeyDown(KeyCode.Escape)) Close();
         }
@@ -110,14 +112,19 @@ public class SkinsWindow : MonoBehaviour
         Plugin.L.LogInfo("COOP skins window opened");
     }
 
+    // Back to the pause menu it was opened from (owner's test: with the window closed and the menu gone, the game was
+    // half paused until the menu was opened and closed again).
     public void Close()
     {
         if (!IsOpen) return;
         IsOpen = false;
         loader?.Stop(); loader = null;
+        SkinShowcase.Hide();
         var player = CoopRunner.Instance?.World?.Player;
         if (blockedPlayer && player != null) player.Unlock();
         blockedPlayer = false;
+        var pause = Object.FindObjectOfType<PauseMenuController>(true);
+        if (pause != null && !pause.gameObject.activeInHierarchy && Env.Get("CSCCOOP_MUTANT") != "skins-close-old") pause.Open();
         Plugin.L.LogInfo($"COOP skins window closed ({previews.Count} pictures made)");
     }
 
@@ -172,7 +179,9 @@ public class SkinsWindow : MonoBehaviour
             : T($"Выберите, как вас видят другие игроки. Людей: {ppl.Count}.", $"Choose how the other players see you. People: {ppl.Count}."), label);
         if (ppl != null)
         {
-            float viewW = area.width - 40, viewH = area.height - 110;
+            float panelW = Mathf.Min(420, (area.width - 40) * 0.36f);
+            float viewW = area.width - 40 - panelW - 16, viewH = area.height - 110;
+            GUILayout.BeginHorizontal();
             Columns = Math.Max(1, (int)((viewW - 20) / (CellW + Pad)));
             int count = ppl.Count + 1;   // cell 0: no skin
             int rows = (count + Columns - 1) / Columns;
@@ -193,15 +202,41 @@ public class SkinsWindow : MonoBehaviour
                     GUI.Box(r, GUIContent.none, box);
                     var pic = new Rect(r.x + 5, r.y + 5, r.width - 10, r.height - 45);
                     if (p == null) GUI.Label(pic, T("\n\n\nБез скина\n(фигура мода)", "\n\n\nNo skin\n(the mod's figure)"), cellLabel);
-                    else if (previews.TryGetValue(key, out var rt)) GUI.DrawTexture(pic, rt, ScaleMode.ScaleToFit);
+                    else if (previews.TryGetValue(key, out var rt) && rt != null && rt.IsCreated()) GUI.DrawTexture(pic, rt, ScaleMode.ScaleToFit);
+                    else if (previews.ContainsKey(key) && Env.Get("CSCCOOP_MUTANT") != "skins-lost") { previews.Remove(key); Lost++; Spinner(pic); }
                     else if (failed.Contains(key)) GUI.Label(pic, T("\n\n\nне загрузился", "\n\n\ncouldn't load"), cellLabel);
                     else Spinner(pic);
                     GUI.Label(new Rect(r.x + 4, r.y + r.height - 40, r.width - 8, 38), p == null ? "" : p.Display, cellLabel);
                     if (GUI.Button(r, GUIContent.none, GUIStyle.none)) Choose(p);
                 }
             GUILayout.EndScrollView();
+            GUILayout.Space(16);
+            ShowcasePanel(panelW, viewH, ppl, chosen);
+            GUILayout.EndHorizontal();
         }
         GUILayout.EndArea();
+    }
+
+    // The chosen skin, big: drag to turn it, the wheel to come closer (to the face).
+    void ShowcasePanel(float w, float h, IReadOnlyList<Person> ppl, string chosen)
+    {
+        GUILayout.BeginVertical(GUILayout.Width(w), GUILayout.Height(h));
+        var p = chosen == "" ? null : SkinCatalog.Find(chosen);
+        GUILayout.Label(p == null ? T("Без скина", "No skin") : p.Display, label);
+        var r = GUILayoutUtility.GetRect(w, h - 70);
+        GUI.Box(r, GUIContent.none, box);
+        SkinShowcase.Show(p);
+        var tex = SkinShowcase.Texture;
+        if (SkinShowcase.Loading || tex == null) Spinner(r);
+        else GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit);
+        var e = Event.current;
+        if (r.Contains(e.mousePosition))
+        {
+            if (e.type == EventType.MouseDrag) { SkinShowcase.Yaw -= e.delta.x * 0.6f; e.Use(); }
+            if (e.type == EventType.ScrollWheel) { SkinShowcase.Zoom = Mathf.Clamp01(SkinShowcase.Zoom - e.delta.y * 0.05f); e.Use(); }
+        }
+        GUILayout.Label(T("Тяните мышью — повернуть, колесо — ближе.", "Drag to turn, wheel to come closer."), cellLabel);
+        GUILayout.EndVertical();
     }
 
     // A loader: a dot running round a circle.
@@ -229,11 +264,15 @@ public class SkinsWindow : MonoBehaviour
     }
 
     public int PreviewCount => previews.Count;
+    public int Lost;   // pictures found gone (a job loaded) and made again
+    public int LivePreviews { get { int n = 0; foreach (var rt in previews.Values) if (rt != null && rt.IsCreated()) n++; return n; } }
     public void ScrollToRow(int row) => scroll.y = row * (CellH + Pad);   // tests
     public string VisibleRange => $"{firstVisible}..{lastVisible}";
     public int FailedCount => failed.Count;
+    public string FailedNames => string.Join(", ", failed.Select(k => SkinCatalog.Find(k)?.Display ?? k));
+    public bool Busy => loader != null && (loader.Busy || pending.Count > 0);
 
-    static Texture2D Solid(Color c) { var t = new Texture2D(1, 1); t.SetPixel(0, 0, c); t.Apply(); return t; }
+    static Texture2D Solid(Color c) { var t = new Texture2D(1, 1) { hideFlags = HideFlags.DontUnloadUnusedAsset }; t.SetPixel(0, 0, c); t.Apply(); return t; }
 }
 
 // Renders a person once into a small picture: under its own camera and light far below the level (layer 31 only),
@@ -256,7 +295,8 @@ public static class SkinPreview
         {
             fig.Pose(studio.position, 180, 0, PlayerFigure.Carry.None, CoopCore.PlayerPose.ToolNone, Vector3.zero, Quaternion.identity, 1, false, 0.02f);
             if (++frames < 10) return;
-            var rt = new RenderTexture(256, 352, 24) { name = "CoopSkinPreview" };
+            // A job's loading unloads unused assets; these pictures are referenced only from managed code.
+            var rt = new RenderTexture(256, 352, 24) { name = "CoopSkinPreview", hideFlags = Env.Get("CSCCOOP_MUTANT") == "skins-lost" ? HideFlags.None : HideFlags.DontUnloadUnusedAsset };
             cam.targetTexture = rt;
             RenderTexture result = rt;
             try { cam.Render(); }
