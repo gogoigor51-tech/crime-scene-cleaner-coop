@@ -626,6 +626,21 @@ victims' bodies" only on the host, a restart only on the host.
   CSCCOOP_SKIN_FACES=1 (faces close up, without and with): DrugDealer, Girl01, SC Mother, Senator, Guest Geralt,
   Amber all open, about 1000 lid vertices moved and 70-150 triangles cut each. Angles can be tried with
   CSCCOOP_EYES=upper,lower,slit; mutants eyes-closed, eyes-stretched. Same iris for everyone; not seen by players.
+- Eyelashes and the lids' meeting line (owner: the lashes never moved, both rows sat under the eye; bumps in the
+  middle of SC Mother's upper lids). The lashes are loose strips of the body mesh along each lid, every strip twice
+  (both faces), 88-99 vertices. Upper strips reach 2.6 radii out and 1.94 to the side: the lash search box was
+  smaller, so they were dropped as 'not a lash' and never moved; the box is 3.5 x 2.3 radii now. The lids meet
+  midway in the widest gap between the rows' roots (-9 to -24 deg; the fixed -4 was too high); a gap under 4 deg is
+  within a row (the strip's other face): with one row found the old fixed slit is kept, not split between faces.
+  Each strip is carried with its lid edge, then turned about its root to point as on an open eye: upper 40 deg up,
+  lower 45 down (direction from the strip's root edge to its tip edge). The upper lid of older people is thick,
+  its fold out to 2+ radii: moving only to 1.8 left the fold hanging over the eye (the bumps), so the upper lid
+  moves fully to 1.75 radii, fading out by 2.4; then the upper opening came down to +15 deg (slit + 16 at least),
+  or the eyes stared. Up is the head bone's axis nearest to hip->head (heads are bowed 1-4 deg in bind pose), the
+  eyeballs look along the same face frame. CSCCOOP_FACE_DIST=<m> (CSCCOOP_FACE_EYE=1: one eye) brings the face
+  camera close to the eyes; CSCCOOP_EYES_DUMP=1 logs the pieces round the eye and each lash strip. skinfaults faces:
+  all six with both rows found and turned, no bumps. Mutants eyes-fixed-slit, eyes-lash-carried, eyes-thin-lid,
+  eyes-body-up.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

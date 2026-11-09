@@ -59,7 +59,7 @@ static class SkinFaultProbe
             Plugin.L.LogInfo($"SKINFAULT '{p.Display}' renderer '{smr.name}' active {smr.gameObject.activeInHierarchy} enabled {smr.enabled} mesh {(smr.sharedMesh != null ? smr.sharedMesh.vertexCount : -1)} null bones {smr.bones.Count(b => b == null)}/{smr.bones.Length} root '{(smr.rootBone != null ? smr.rootBone.name : "-")}' mats {m}");
         }
         var name = p.Display + (faces ? (index % 2 == 1 ? "_open" : "_closed") : "");
-        if (faces) Plugin.L.LogInfo($"SKINFAULT '{name}': {EyeOpener.LastMoved} eyelid vertices moved, {EyeOpener.LastCut} triangles cut");
+        if (faces) Plugin.L.LogInfo($"SKINFAULT '{name}': {EyeOpener.LastMoved} eyelid vertices moved, {EyeOpener.LastCut} triangles cut, lids meet at {EyeOpener.LastSlit:F1} deg, head bowed {EyeOpener.LastTilt:F1} deg");
         SkinPreview.Render(p, go, hum, rt =>
         {
             if (rt != null)

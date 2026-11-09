@@ -30,6 +30,13 @@ public static class Eyeballs
         foreach (var smr in copy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             if (smr.name.StartsWith("CC_Base_Eye", StringComparison.Ordinal)) smr.enabled = false;
         float radius = ipd * 0.2f;
+        // the eyes look where the face does: the copy stands upright facing +z, but some people bow their head
+        var right = (r.position - l.position).normalized;
+        var up = EyeOpener.BestAxis(new[] { head.right, head.up, head.forward }, Vector3.up);
+        up = (up - right * Vector3.Dot(up, right)).normalized;
+        var fwd = Vector3.Cross(right, up);
+        if (Vector3.Dot(fwd, Vector3.forward) < 0) fwd = -fwd;
+        var look = Quaternion.LookRotation(fwd, up);
         foreach (var eye in new[] { l, r })
         {
             var go = new GameObject("CoopEyeball");
@@ -37,7 +44,7 @@ public static class Eyeballs
             go.transform.SetParent(head, true);
             // the copy is placed upright facing +z at this point (SkinModel): the eye looks along +z
             go.transform.position = eye.position;
-            go.transform.rotation = Quaternion.identity;
+            go.transform.rotation = look;
             go.transform.localScale = Vector3.one * radius / Mathf.Max(1e-6f, head.lossyScale.x);
             go.AddComponent<MeshFilter>().sharedMesh = Sphere();
             go.AddComponent<MeshRenderer>().sharedMaterial = Material();
