@@ -650,6 +650,20 @@ victims' bodies" only on the host, a restart only on the host.
   again whenever it changes; sends at most every 0.3 s. skins suite: the client's eyes blue, the host must see
   #2E6FD0 on the client's skin and the client the host's default: 5/5; mutant iris-local (colour not sent): 4/5,
   the eye check fails. skinswindow probe: shot_skins_face.png shows the ring with the blue chosen.
+- Eyes, owner's test of 0.4.4-test3 (TA Nomad01, PO Man01/02, Art AsianFemale02, Art BlackFemale01 strange; sharp
+  bumps on the lids; looking from the side one saw into the head). (1) The eyeballs were placed from the copy's bones
+  at run time: on Art BlackFemale01 they stood out of the face. EyeOpener now fits them where the skin is, in the head
+  bone's own space from its bind pose (PersonData.Eyes, made in SkinFiles.Create by Eyeballs.Place): no bigger than a
+  fifth of the eye distance, than where the shut lids were less 0.15 radii, than the skin left round the opening.
+  Mutant eyes-bone-placed. (2) The cut follows the triangles, so the lids' edges were ragged: SmoothEdge puts each
+  edge vertex on a smooth almond (as open in the middle as the lid there, meeting at the corners) and smooths the
+  lid's angle round the eye 4 times, the vertices next to skin that stayed held, same-place vertices together.
+  Mutant eyes-sharp. (3) A dark socket behind each eyeball: a sphere of 1.7 eyeball radii, open in a small cap in
+  front, facing inward, so it is seen only through the opening (smaller, rays through the corners went past it and
+  showed the background). Mutant eyes-no-socket. (4) A lash strip's root is the middle of its root edge (the nearest
+  vertex was at a corner: small weight, the lashes hardly moved); roots from 0.9 radii (Nomad's were at 1.05-1.07).
+  Mutant eyes-lash-corner. Probe: CSCCOOP_SKIN_FACE_NAMES="A;B" for other people, CSCCOOP_FACE_YAW=<deg> turns them.
+  Eleven faces checked front and turned 50 deg; skins suite 5/5.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

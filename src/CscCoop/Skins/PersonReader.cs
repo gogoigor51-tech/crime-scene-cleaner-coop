@@ -46,7 +46,11 @@ public sealed class PersonData
     public Person Person; public List<NodeData> Nodes = new(); public List<RendererInfo> Renderers = new();
     public List<MeshArrays> Meshes = new(); public List<MatInfo> Materials = new(); public List<TexBytes> Textures = new();
     public long Bytes;   // read from disk, for the log
+    public List<EyeFit> Eyes = new();   // the opened eyes' eyeballs (EyeOpener), made with the person (SkinFiles)
 }
+
+// An eyeball in its head bone's space: centre, which way it looks, radius; the socket behind it.
+public sealed class EyeFit { public int Head; public UnityEngine.Vector3 Pos; public UnityEngine.Quaternion Rot; public float Radius, Socket; }
 
 public static class PersonReader
 {

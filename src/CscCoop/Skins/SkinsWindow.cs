@@ -341,7 +341,9 @@ public static class SkinPreview
     {
         if (fig != null)
         {
-            fig.Pose(studio.position, 180, 0, PlayerFigure.Carry.None, CoopCore.PlayerPose.ToolNone, Vector3.zero, Quaternion.identity, 1, false, 0.02f);
+            // CSCCOOP_FACE_YAW (tests): the person turned, to look into the eyes from the side
+            float yaw = 180 + (Face && float.TryParse(Env.Get("CSCCOOP_FACE_YAW"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fy) ? fy : 0);
+            fig.Pose(studio.position, yaw, 0, PlayerFigure.Carry.None, CoopCore.PlayerPose.ToolNone, Vector3.zero, Quaternion.identity, 1, false, 0.02f);
             if (++frames < 10) return;
             if (Env.Get("CSCCOOP_TEST") == "skinfaults" && fig.Skin != null)
                 foreach (var smr in fig.Skin.Root.GetComponentsInChildren<SkinnedMeshRenderer>(true))

@@ -13,8 +13,11 @@ static class SkinFaultProbe
 {
     // CSCCOOP_SKIN_FACES=1: the eyes experiment: faces close up, each person without and with EyeOpener.
     static readonly bool faces = Env.Get("CSCCOOP_SKIN_FACES") == "1";
+    // CSCCOOP_SKIN_FACE_NAMES="A;B;C": these people instead (each twice: closed, opened)
     static readonly string[] Names = faces
-        ? new[] { "DrugDealer", "DrugDealer", "Girl01", "Girl01", "SC Mother", "SC Mother", "Senator", "Senator", "Guest Geralt", "Guest Geralt", "Amber", "Amber" }
+        ? (Env.Get("CSCCOOP_SKIN_FACE_NAMES") != ""
+            ? Env.Get("CSCCOOP_SKIN_FACE_NAMES").Split(';').SelectMany(n => new[] { n, n }).ToArray()
+            : new[] { "DrugDealer", "DrugDealer", "Girl01", "Girl01", "SC Mother", "SC Mother", "Senator", "Senator", "Guest Geralt", "Guest Geralt", "Amber", "Amber" })
         : new[] { "PoolBoy new", "wife new", "Doctor Body Normal", "Doctor", "BigJim", "Pizza Italian2 Cts", "Husband new", "DrugDealer" };
     static int step, index;
     static float at;

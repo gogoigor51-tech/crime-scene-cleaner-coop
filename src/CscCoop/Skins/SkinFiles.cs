@@ -58,6 +58,7 @@ public static class SkinFiles
             if (i > 0 && !n.Active) t.gameObject.SetActive(false);
             nodes[i] = t;
         }
+        Eyeballs.Place(nodes, d.Eyes);
         var meshes = new Mesh[d.Meshes.Count];
         for (int i = 0; i < meshes.Length; i++) meshes[i] = MakeMesh(d.Meshes[i]);
         var textures = new Texture2D[d.Textures.Count];

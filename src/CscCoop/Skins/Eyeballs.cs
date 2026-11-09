@@ -14,9 +14,43 @@ public static class Eyeballs
     static readonly System.Collections.Generic.Dictionary<int, Material> materials = new();
     public const string DefaultHex = "#5C5530";   // the brown-green the eyes had before the colour could be chosen
 
+    // From SkinFiles.Create: the eyeballs EyeOpener fitted, on their head bones, each with a socket behind it.
+    public static void Place(Transform[] nodes, System.Collections.Generic.List<EyeFit> eyes)
+    {
+        foreach (var e in eyes)
+        {
+            if (e.Head < 0 || e.Head >= nodes.Length || nodes[e.Head] == null) continue;
+            var go = Make("CoopEyeball", nodes[e.Head], e.Pos, e.Rot, e.Radius, Sphere(), Material(Parse(DefaultHex)));
+            // Through the opened lids, from the side, one saw into the head (the skin has no inside): a dark socket
+            // behind the eyeball, a bowl seen only from inside, so only through the opening.
+            if (Env.Get("CSCCOOP_MUTANT") != "eyes-no-socket")
+                Make("CoopEyeSocket", nodes[e.Head], e.Pos, e.Rot, e.Socket * 1.7f, Bowl(), SocketMaterial());
+        }
+    }
+
+    static GameObject Make(string name, Transform head, Vector3 pos, Quaternion rot, float scale, Mesh mesh, Material mat)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(head, false);
+        go.transform.localPosition = pos; go.transform.localRotation = rot; go.transform.localScale = Vector3.one * scale;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        return go;
+    }
+
     public static int Add(GameObject copy, Transform head)
     {
         if (!EyeOpener.Enabled || head == null) return 0;
+        // made with the person already (Place): on the copy's layer, the game's eyes hidden
+        int have = 0;
+        foreach (var mr in copy.GetComponentsInChildren<MeshRenderer>(true))
+            if (mr.name == "CoopEyeball" || mr.name == "CoopEyeSocket") { mr.gameObject.layer = copy.layer; if (mr.name == "CoopEyeball") have++; }
+        if (have > 0)
+        {
+            foreach (var smr in copy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr.name.StartsWith("CC_Base_Eye", StringComparison.Ordinal)) smr.enabled = false;
+            return have;
+        }
         Transform l = null, r = null;
         // Some people hold a second rig with the same names, not in bind pose: the eyes nearest the (skinned) head.
         foreach (var t in copy.GetComponentsInChildren<Transform>(true))
@@ -51,6 +85,43 @@ public static class Eyeballs
             go.AddComponent<MeshRenderer>().sharedMaterial = Material(Parse(DefaultHex));
         }
         return 2;
+    }
+
+    // The socket: a unit sphere without a small cap in front (beyond 0.9), facing inward, so it is seen only from inside.
+    static Mesh bowl;
+    static Mesh Bowl()
+    {
+        if (bowl != null) return bowl;
+        const int Rings = 12, Segs = 20;
+        float th0 = Mathf.Acos(0.9f);   // only a small cap in front left open: the corners of the opening are far to the side
+        var v = new Vector3[(Rings + 1) * (Segs + 1)]; var n = new Vector3[v.Length];
+        for (int i = 0; i <= Rings; i++)
+            for (int j = 0; j <= Segs; j++)
+            {
+                float th = th0 + (Mathf.PI - th0) * i / Rings, ph = 2 * Mathf.PI * j / Segs;
+                var p = new Vector3(Mathf.Sin(th) * Mathf.Cos(ph), Mathf.Sin(th) * Mathf.Sin(ph), Mathf.Cos(th));
+                int k = i * (Segs + 1) + j; v[k] = p; n[k] = -p;
+            }
+        var tri = new int[Rings * Segs * 6]; int t = 0;
+        for (int i = 0; i < Rings; i++)
+            for (int j = 0; j < Segs; j++)
+            {
+                int a = i * (Segs + 1) + j, b = a + Segs + 1;
+                tri[t++] = a; tri[t++] = a + 1; tri[t++] = b;   // the sphere's winding turned round: inward
+                tri[t++] = a + 1; tri[t++] = b + 1; tri[t++] = b;
+            }
+        bowl = new Mesh { name = "CoopEyeSocket", vertices = v, normals = n, triangles = tri, hideFlags = HideFlags.DontUnloadUnusedAsset };
+        return bowl;
+    }
+
+    static Material socket;
+    static Material SocketMaterial()
+    {
+        if (socket != null) return socket;
+        socket = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "CoopEyeSocket", hideFlags = HideFlags.DontUnloadUnusedAsset };
+        socket.SetColor("_BaseColor", new Color(0.16f, 0.06f, 0.05f));   // dark, a little red
+        socket.SetFloat("_Smoothness", 0.3f);
+        return socket;
     }
 
     // A unit sphere, the front (+z) mapped flat onto the eye picture.
