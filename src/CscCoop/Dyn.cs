@@ -50,6 +50,8 @@ public static class Dyn
         public bool SentLamp;
         public float SentWater = -1, SentTaint = -1;
         public string SentBuffs = "", AppliedBuffs = "";
+        public Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<Skinable> Skins;   // another player's: dressed in their skins
+        public float SkinAt;   // next skin check (0: now)
     }
 
     static readonly Dictionary<uint, Obj> byId = new();
@@ -97,6 +99,7 @@ public static class Dyn
         float now = Time.unscaledTime;
         foreach (var o in new List<Obj>(byId.Values))
         {
+            if (o.Go != null && o.Kind != Kind.Shard && BelongsTo(o) != Me(s)) DressSkins(o, now);
             if (o.Mine)
             {
                 if (o.Go == null) { if (o.Name != null) SendState(o, false, false); Forget(o); continue; }
@@ -351,8 +354,40 @@ public static class Dyn
         Plugin.L.LogInfo($"COOP took over {o.Kind.ToString().ToLowerInvariant()} {o.Id:X} ({o.Name})");
     }
 
-    // Whose inventory a tool belongs to: the player number its id was made with.
+    // Whose inventory a tool belongs to: the player number its id was made with (for a bag: whose trash can made it).
     static byte BelongsTo(Obj o) => (byte)(o.Id >> 20);
+    static byte Me(CoopCore.Session s) => s.Me == CoopCore.Session.NoPlayer ? (byte)0 : s.Me;
+
+    // ---- other players' skins on their tools and bags (ToolSkins) ----
+
+    // Once a second: each Skinable of another player's tool or bag wears that player's skin for its type.
+    static void DressSkins(Obj o, float now)
+    {
+        if (now < o.SkinAt) return;
+        o.SkinAt = now + 1;
+        if (Env.Get("CSCCOOP_MUTANT") == "toolskin-puppet") return;
+        o.Skins ??= o.Go.GetComponentsInChildren<Skinable>(true);
+        byte owner = BelongsTo(o);
+        foreach (var sk in o.Skins)
+        {
+            if (sk == null) continue;
+            var data = ToolSkins.Data(ToolSkins.SkinOf(owner, sk.skinType));
+            int want = data != null ? data.id : -1, have = sk.CurrentSkin != null ? sk.CurrentSkin.id : -1;
+            if (want == have) continue;
+            ToolSkins.Applying = true;
+            try
+            {
+                if (data != null) sk.TrySetCustomSkin(data); else sk.TrySetDefaultSkin();
+                Plugin.L.LogInfo($"COOP player {owner}'s {o.Name} {o.Id:X}: {sk.skinType} skin {(data != null ? $"{data.id} '{data.DisplayName}'" : "default")}");
+            }
+            catch (Exception e) { o.SkinAt = now + 10; Plugin.L.LogWarning($"COOP skin on {o.Name} {o.Id:X}: {e.Message}"); }
+            finally { ToolSkins.Applying = false; }
+        }
+    }
+
+    // The game dresses every Skinable in the local player's choice, puppets too (when they wake, and when the local
+    // choice changes): DressSkins puts their player's back within a second. Not by patching Skinable: TrySetSkin and
+    // TrySetDefaultSkin are tail-call stubs of a few bytes, and a Harmony detour on them crashed both games in the hub.
 
     // Putting a placed tool back into the inventory: only its own player's, and taken back first. The power
     // washer station has its own PickUp (it overrides PortableItem's).

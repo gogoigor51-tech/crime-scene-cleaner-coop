@@ -198,7 +198,7 @@ public class CoopRunner : MonoBehaviour
         }
         catch (Exception e) { Plugin.L.LogError($"COOP tick failed: {e}"); t0 = t1 = t2 = t3 = prof.ElapsedTicks; }
         Watchdog.Where = "smooth"; World.Smooth(Time.deltaTime); t4 = prof.ElapsedTicks;
-        Watchdog.Where = "skins"; SkinSync.Tick(this);
+        Watchdog.Where = "skins"; SkinSync.Tick(this); ToolSkins.Tick(this);
         Watchdog.Where = "ghosts"; DrawGhosts(); t5 = prof.ElapsedTicks;
         Watchdog.Where = "after mod update";
         double ms(long a, long b) => (b - a) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;

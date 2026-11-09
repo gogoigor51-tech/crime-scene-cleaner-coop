@@ -518,6 +518,36 @@ victims' bodies" only on the host, a restart only on the host.
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
 
+### Other players' tool levels and skins (2026-11-09)
+- Owner's request: a friend's tools should look like theirs (level and the game's tool skin), on the held tool, their
+  buckets, lamps and trash bags. toolskinprobe (first job): each tool level is its own ToolData with its own prefab
+  (Basic Sponge 17, Sponge II 18, Akimbo Sponge 19 = DualSponge with a second sponge; Bucket 1/2/3 Star 24-26 with
+  their own models; lamps' level 2 use the same prefab, the level only keeps a toppled lamp working), so the tool id
+  in the pose and the prefab name of a placed tool already carry the level. The lance now goes by its level's tool id
+  too (27-29; before: always the local player's lance). Skins: SkinableController (one SkinData per SkinType or none;
+  ~120 skins for axe, sponge, mop, bucket, lamps, washer, lance, ozonator, trash can, trash bag, arms, truck), and a
+  Skinable on each tool and on the trash bag; the game puts the local player's choice on every Skinable, so a friend's
+  bucket or lamp copy showed our skin, and the held-tool copy (renderers of the plain prefab) none.
+- ToolSkins: each player sends its choice as global state per player (Ev.ToolSkins = 43, "type:id;..."), checked
+  once a second. Dyn puppets (placed tools, bags) of another player get that player's skin through their own
+  Skinable (TrySetCustomSkin / TrySetDefaultSkin), re-checked once a second because the game re-dresses them in the
+  local choice when they wake and when the local choice changes. Not by patching Skinable: TrySetSkin and
+  TrySetDefaultSkin are tail-call stubs of a few bytes, and Harmony detours on them crashed both games in the hub
+  (APPCRASH 0x80000003 at GameAssembly+0x153c3ff, inside TrySetDefaultSkin).
+- Held tools: the game's skin scripts can't run on a copy (toolskinprobe2: dressing a hidden copy of the DualSponge
+  put a glove in the local player's left hand), so ToolLook dresses its copy itself from the SkinData
+  (toolskinprobe3): the skin model (SkinPrefabReference, loaded with Addressables.LoadAssetAsync by its runtime key,
+  not through the AssetReference the game loads itself; a first load takes 10-30 s, the plain tool is shown until
+  then) at the Skinable's skinModelParent with the skin's position/rotation offsets, the tool's
+  defaultMeshRenderers and defaultSkinElements hidden, the skin's decals on the tool's SkinableDecal parts. The
+  akimbo sponge's second sponge (DualSponge.secondSponge; the gloves' left one is a decal on it) is a second copy in
+  the figure's left hand, the right hand's hold mirrored, the left hand reaching for it.
+- toolskins suite (run-pair -Test toolskins -QuitAfter 80, first job): the client chooses boxing gloves (7), the
+  cardboard bucket (9) and the black hole bag (29) and holds the akimbo sponge, the host the Bogo bucket (14); each
+  puts its bucket down and makes a bag. PASS 6/6 (each sees the other's bucket and bag in the other's skin, its own
+  in its own, the host sees two gloves, one in each hand: shot_figure_toolskins_front.png). Mutants: toolskin-local
+  (choice never sent) 2/6, toolskin-puppet (puppets not dressed: they wore the viewer's skin, as before) 2/6.
+
 ### Skins: the game's people as player models (in progress, 2026-11-06)
 - No player model is loaded in a job (see "model probe"): the only full human models are the bodies. Their names in
   the scene files (level*, sharedassets*): about 115 characters across all jobs, almost all Character Creator rigs

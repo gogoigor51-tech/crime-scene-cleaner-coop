@@ -49,6 +49,7 @@ public enum Ev : byte
     CctvHack = 40,        // state per CCTV laptop: hacked (Cctv)
     CctvDelete = 41,      // state per CCTV laptop and recording: deleted
     Skin = 42,            // global state per player: the person it is shown as (SkinSync)
+    ToolSkins = 43,       // global state per player: the game's tool skins it chose (ToolSkins)
     BotStep = 99,         // tests only: the other bot's step (lockstep, see Bot)
 }
 
@@ -64,7 +65,7 @@ public static class WorldEvents
     // In a hub each player is in their own apartment (their own save): only poses go between them, no world
     // events either way, so nothing of one player's apartment ends up in the other's save.
     static bool InHub => CoopRunner.Instance != null && CoopRunner.Instance.World.InHub;
-    static bool Global(Ev k) => k is Ev.JobTicket or Ev.HostJobs or Ev.MyJobs or Ev.BotStep or Ev.Report or Ev.ReportNote or Ev.TableHashes or Ev.Skin;
+    static bool Global(Ev k) => k is Ev.JobTicket or Ev.HostJobs or Ev.MyJobs or Ev.BotStep or Ev.Report or Ev.ReportNote or Ev.TableHashes or Ev.Skin or Ev.ToolSkins;
 
     public static void Send(Ev kind, Action<BinaryWriter> write, uint stateKey = 0)
     {
@@ -126,6 +127,7 @@ public static class WorldEvents
                 case Ev.CctvHack: case Ev.CctvDelete: Cctv.Apply((Ev)kind, r); break;
                 case Ev.ReportNote: Reports.OnNote(r); break;
                 case Ev.Skin: SkinSync.OnSkin(from, r); break;
+                case Ev.ToolSkins: ToolSkins.OnSkins(from, r); break;
                 case Ev.BotStep: Bot.PartnerStep = r.ReadInt32(); break;
                 case Ev.Action: Actions.Apply(r); break;
                 case Ev.PartCollect: Trash.OnPartCollect(r); break;

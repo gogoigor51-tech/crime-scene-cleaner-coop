@@ -92,6 +92,9 @@ public partial class Bot : MonoBehaviour
         if (test == "skinloader" && w != null) { SkinLoaderProbe.Tick(w); return; }
         if (test == "skinswindow" && w != null) { SkinsWindowProbe.Tick(w); return; }
         if (test == "skinfaults" && w != null) { SkinFaultProbe.Tick(w); return; }
+        if (test == "toolskinprobe" && w != null) { ToolSkinProbe.Tick(w); return; }
+        if (test == "toolskinprobe2" && w != null) { ToolSkinProbe2.Tick(w); return; }
+        if (test == "toolskinprobe3" && w != null) { ToolSkinProbe3.Tick(w); return; }
         if (test == "report") ReportWatch();
 
         if (test == "jobs" && w != null) { JobTest(s, inScene, w); }
@@ -129,6 +132,7 @@ public partial class Bot : MonoBehaviour
         if (test == "breakhit") BreakHitTest(t, ses, w);
         if (test == "bump") BumpTest(t, ses, w);
         if (test == "toolcarry") ToolCarryTest(t, ses, w);
+        if (test == "toolskins") ToolSkinsTest(t, ses, w);
         if (test == "footsteps") FootstepsTest(t, ses, w);
         if (test == "doorsync") DoorSyncTest(t, ses, w);
         if (test == "products") ProductsTest(t, ses, w);

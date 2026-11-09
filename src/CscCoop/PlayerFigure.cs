@@ -77,7 +77,7 @@ public sealed class PlayerFigure
             MakeMaterial(new Color(0.22f, 0.23f, 0.25f, 1), 0.3f),   // respirator
             MakeMaterial(new Color(0.04f, 0.06f, 0.09f, 1), 0.9f),   // goggles
         };
-        Tool = new ToolLook(Root.transform);
+        Tool = new ToolLook(Root.transform, n);
     }
 
     // Bones start world-aligned (identity rotation), so a bone's limb axis is the direction to its child.
@@ -335,6 +335,15 @@ public sealed class PlayerFigure
             Tool.SetUsing(use);
             var f = t.forward; var up = t.up; var rt = t.right;
             Reach(1, gripW, -up * 0.5f + rt * 0.8f - f * 0.3f);
+            // The akimbo sponge's second sponge: the right hand's hold mirrored to the left (figure space x -> -x).
+            if (Tool.HasLeft)
+            {
+                var gripM = new Vector3(-grip.x, grip.y, grip.z) + new Vector3(-stroke.x, stroke.y, stroke.z);
+                var rotM = new Quaternion(rotL.x, -rotL.y, -rotL.z, rotL.w);
+                var posM = gripM - rotM * (Tool.LeftCentreLocal * (toolScale > 0.01f ? toolScale : 1));
+                Tool.PlaceLeft(t.TransformPoint(posM), t.rotation * rotM, toolScale);
+                Reach(0, t.TransformPoint(gripM), -up * 0.5f - rt * 0.8f - f * 0.3f);
+            }
             // Long tools take the other hand further along the shaft.
             if (Tool.Length > 0.7f) Reach(0, pos + (Tool.Centre - pos).normalized * Mathf.Min(0.4f, Tool.Length * 0.35f), -up * 0.5f - rt * 0.8f - f * 0.3f);
         }
