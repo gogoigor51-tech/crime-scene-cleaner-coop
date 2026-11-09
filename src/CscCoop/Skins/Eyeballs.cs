@@ -11,7 +11,8 @@ namespace CscCoop.Skins;
 public static class Eyeballs
 {
     static Mesh sphere;
-    static Material material;
+    static readonly System.Collections.Generic.Dictionary<int, Material> materials = new();
+    public const string DefaultHex = "#5C5530";   // the brown-green the eyes had before the colour could be chosen
 
     public static int Add(GameObject copy, Transform head)
     {
@@ -47,7 +48,7 @@ public static class Eyeballs
             go.transform.rotation = look;
             go.transform.localScale = Vector3.one * radius / Mathf.Max(1e-6f, head.lossyScale.x);
             go.AddComponent<MeshFilter>().sharedMesh = Sphere();
-            go.AddComponent<MeshRenderer>().sharedMaterial = Material();
+            go.AddComponent<MeshRenderer>().sharedMaterial = Material(Parse(DefaultHex));
         }
         return 2;
     }
@@ -81,15 +82,39 @@ public static class Eyeballs
         return sphere;
     }
 
-    // White, a brown-green iris with darker rays and rim, a black pupil, a soft highlight from the material.
-    static Material Material()
+    // The eyes of a person made here (each player's own colour; SkinSync, SkinShowcase).
+    public static void SetColor(GameObject root, Color32 c)
     {
-        if (material != null) return material;
+        if (root == null) return;
+        var m = Material(c);
+        foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(true))
+            if (mr.name == "CoopEyeball") mr.sharedMaterial = m;
+    }
+
+    // "#RRGGBB" (or "RRGGBB"); anything else: the default.
+    public static Color32 Parse(string hex)
+    {
+        hex = (hex ?? "").Trim().TrimStart('#');
+        if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int v))
+            return new Color32((byte)(v >> 16), (byte)(v >> 8), (byte)v, 255);
+        return Parse(DefaultHex);
+    }
+
+    public static string Hex(Color32 c) => $"#{c.r:X2}{c.g:X2}{c.b:X2}";
+
+    // White, an iris of the colour with darker rays and rim (a little lighter round the pupil), a black pupil, a soft
+    // highlight from the material. One per colour, kept.
+    static Material Material(Color32 iris)
+    {
+        int key = iris.r << 16 | iris.g << 8 | iris.b;
+        if (materials.TryGetValue(key, out var have) && have != null) return have;
         const int S = 128;
         var tex = new Texture2D(S, S, TextureFormat.RGBA32, true) { name = "CoopEye", hideFlags = HideFlags.DontUnloadUnusedAsset };
         var px = new Color32[S * S];
         var rnd = new System.Random(7);
         var rays = new float[64]; for (int i = 0; i < rays.Length; i++) rays[i] = (float)rnd.NextDouble();
+        Color col = iris;
+        var inner = Color.Lerp(col, new Color(0.62f, 0.48f, 0.22f), 0.25f) * 1.15f; var outer = col * 0.8f;
         for (int y = 0; y < S; y++)
             for (int x = 0; x < S; x++)
             {
@@ -101,7 +126,6 @@ public static class Eyeballs
                     float a = (Mathf.Atan2(dy, dx) / (2 * Mathf.PI) + 0.5f) * rays.Length;
                     float ray = rays[(int)a % rays.Length];
                     float f = (d - 0.16f) / 0.24f;
-                    var inner = new Color(0.45f, 0.33f, 0.16f); var outer = new Color(0.25f, 0.30f, 0.20f);
                     c = Color.Lerp(inner, outer, f) * (0.75f + 0.35f * ray);
                     if (f > 0.85f) c *= 0.55f;   // the dark rim
                 }
@@ -115,9 +139,10 @@ public static class Eyeballs
             }
         tex.SetPixels32(px);
         tex.Apply(true, true);
-        material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "CoopEye", hideFlags = HideFlags.DontUnloadUnusedAsset };
+        var material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "CoopEye " + Hex(iris), hideFlags = HideFlags.DontUnloadUnusedAsset };
         material.SetTexture("_BaseMap", tex);
         material.SetFloat("_Smoothness", 0.85f);
+        materials[key] = material;
         return material;
     }
 }

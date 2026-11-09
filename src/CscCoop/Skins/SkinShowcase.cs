@@ -45,7 +45,7 @@ public static class SkinShowcase
     {
         if (fig != null) { fig.SetSkin(null); fig.Destroy(); }
         fig = new PlayerFigure(41, new Color(0.85f, 0.62f, 0.12f));
-        if (go != null) fig.SetSkin(SkinModel.FromBuilt(go, hum, name, fig.Root.transform));
+        if (go != null) { fig.SetSkin(SkinModel.FromBuilt(go, hum, name, fig.Root.transform)); Eyeballs.SetColor(go, iris ?? Eyeballs.Parse(Plugin.Iris.Value)); }
         foreach (var t in fig.Root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Layer;
         shown = wantKey;
     }
@@ -61,6 +61,10 @@ public static class SkinShowcase
         cam.transform.rotation = Quaternion.identity;
         cam.Render();
     }
+
+    // The colour being picked (the window), shown at once.
+    static Color32? iris;
+    public static void SetIris(Color32 c) { iris = c; if (fig?.Skin != null) Eyeballs.SetColor(fig.Skin.Root, c); }
 
     public static void Hide() { loader?.Stop(); loader = null; want = null; wantKey = shown; }
 

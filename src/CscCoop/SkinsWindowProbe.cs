@@ -43,6 +43,7 @@ static class SkinsWindowProbe
                 step = 3; at = now + 4; break;
             case 3:
                 SkinShowcase.Zoom = 1; SkinShowcase.Yaw = 180;
+                win.SetIris(CscCoop.Skins.Eyeballs.Parse("#2E6FD0"));   // the colour ring's choice, on the face shot
                 step = 4; at = now + 1.5f; break;
             case 4:
                 Shot("shot_skins_face.png");
@@ -83,6 +84,7 @@ static class SkinsWindowProbe
             case 10:
                 Plugin.L.LogInfo($"SKINSWIN all rows: {win.LivePreviews} pictures, {win.FailedCount} failed: {win.FailedNames}");
                 win.Choose(null);
+                win.SetIris(CscCoop.Skins.Eyeballs.Parse(CscCoop.Skins.Eyeballs.DefaultHex));
                 win.CloseLikeEscape();
                 step = 11; at = now + 2; break;
             case 11:

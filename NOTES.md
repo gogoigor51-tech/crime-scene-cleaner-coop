@@ -641,6 +641,15 @@ victims' bodies" only on the host, a restart only on the host.
   camera close to the eyes; CSCCOOP_EYES_DUMP=1 logs the pieces round the eye and each lash strip. skinfaults faces:
   all six with both rows found and turned, no bumps. Mutants eyes-fixed-slit, eyes-lash-carried, eyes-thin-lid,
   eyes-body-up.
+- Eye colour (owner's request: chosen on an RGB colour ring). Skins/ColorRing.cs: IMGUI ring of hues round a
+  saturation/brightness square, under the showcase in the skins window, with a swatch, the hex and a Default button.
+  While dragging the showcase shows the colour on the face (zoomed in); on letting go it is saved (Plugin.Iris,
+  [Skins] IrisColor, #RRGGBB, default #5C5530 = the old brown-green) and sent. The eyeball material is made once per
+  colour (iris lighter round the pupil, darker rim, the same rays). Ev.Skin carries the colour after the skin's key
+  (an older sender's key alone reads as the default); SkinSync puts it on the player's skin when it is made and
+  again whenever it changes; sends at most every 0.3 s. skins suite: the client's eyes blue, the host must see
+  #2E6FD0 on the client's skin and the client the host's default: 5/5; mutant iris-local (colour not sent): 4/5,
+  the eye check fails. skinswindow probe: shot_skins_face.png shows the ring with the blue chosen.
 
 ### Super Stacker reward, mails, the van animation (contributed, 2026-11-04)
 - Super Stacker reward. EventOnScoreReach (on the arcade in GameDevOffice) listens to the minigame's

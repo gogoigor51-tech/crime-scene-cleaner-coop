@@ -1,15 +1,15 @@
 """Checks the skins suite (tools/run-pair.ps1 -Test skins): each player sees the other in the skin they chose, and the
-mod's figure again once the client chose none."""
+mod's figure again once the client chose none, and the client's blue eyes (the colour ring) on the host's screen."""
 import re
 import sys
 
 
 def state(log, label, player):
-    m = re.findall(r"SKINS " + label + r": player " + str(player) + r" figure (\w+) skin '([^']*)' own mesh (\w+) worn '([^']*)'; mine '([^']*)'", log)
+    m = re.findall(r"SKINS " + label + r": player " + str(player) + r" figure (\w+) skin '([^']*)' own mesh (\w+) worn '([^']*)'; mine '([^']*)'(?: eyes '([^']*)')?", log)
     if not m:
         return None
-    fig, skin, own, worn, mine = m[-1]
-    return {"figure": fig == "True", "skin": skin, "own": own == "True", "worn": worn, "mine": mine}
+    fig, skin, own, worn, mine, eyes = m[-1]
+    return {"figure": fig == "True", "skin": skin, "own": own == "True", "worn": worn, "mine": mine, "eyes": eyes}
 
 
 def main(_h, _c, host_log, client_log):
@@ -32,6 +32,8 @@ def main(_h, _c, host_log, client_log):
         (hc and ck and hc["skin"] == ck.group(2) and not hc["own"], "the host sees the client as the client's choice, the mod's mesh hidden"),
         (cc and hk and cc["skin"] == hk.group(2) and not cc["own"], "the client sees the host as the host's choice"),
         (hx and hx["skin"] == "" and hx["own"], "after the client chose none, the host sees the mod's figure again"),
+        (hc and hc["eyes"] == "#2E6FD0" and cc and cc["eyes"] == "#5C5530",
+         f"each sees the other's eye colour (host sees {hc and hc['eyes']}, wanted #2E6FD0; client sees {cc and cc['eyes']}, wanted #5C5530)"),
     ]
     for ok, what in checks:
         print(f"{'PASS' if ok else 'FAIL'}  {what}")

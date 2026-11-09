@@ -230,7 +230,8 @@ public class SkinsWindow : MonoBehaviour
         GUILayout.BeginVertical(GUILayout.Width(w), GUILayout.Height(h));
         var p = chosen == "" ? null : SkinCatalog.Find(chosen);
         GUILayout.Label(p == null ? T("Без скина", "No skin") : p.Display, label);
-        var r = GUILayoutUtility.GetRect(w, h - 70);
+        float RingH = Mathf.Clamp(h * 0.3f, 100, 150);   // the eye colour ring, smaller on short screens
+        var r = GUILayoutUtility.GetRect(w, h - 70 - RingH);
         GUI.Box(r, GUIContent.none, box);
         SkinShowcase.Show(p);
         var tex = SkinShowcase.Texture;
@@ -243,7 +244,46 @@ public class SkinsWindow : MonoBehaviour
             if (e.type == EventType.ScrollWheel) { SkinShowcase.Zoom = Mathf.Clamp01(SkinShowcase.Zoom - e.delta.y * 0.05f); e.Use(); }
         }
         GUILayout.Label(T("Тяните мышью — повернуть, колесо — ближе.", "Drag to turn, wheel to come closer."), cellLabel);
+        IrisPanel(w, RingH);
         GUILayout.EndVertical();
+    }
+
+    // The eyes' colour: a ring of hues round a saturation/brightness square. Shown on the showcase at once (brought
+    // to the face), saved and sent to the others when the mouse lets go.
+    readonly ColorRing ring = new();
+
+    void IrisPanel(float w, float h)
+    {
+        // from the config at first, and again if it was changed elsewhere (the config file, a test)
+        if (!ring.Dragging && Plugin.Iris.Value != lastSaved) { ring.Color = Eyeballs.Parse(Plugin.Iris.Value); lastSaved = Plugin.Iris.Value; }
+        var r = GUILayoutUtility.GetRect(w, h);
+        var ringRect = new Rect(r.x, r.y, h, h);
+        int changed = ring.Draw(ringRect);
+        var c = ring.Color;
+        if (changed != 0) { SkinShowcase.SetIris(c); SkinShowcase.Zoom = 1; }
+        if (changed == 2) SetIris(c);
+        float tx = r.x + h + 12;
+        GUI.Label(new Rect(tx, r.y + 6, r.width - h - 12, 26), T("Цвет глаз", "Eye colour"), label);
+        var old = GUI.color; GUI.color = (Color)c;
+        GUI.DrawTexture(new Rect(tx, r.y + 40, 48, 28), Texture2D.whiteTexture);
+        GUI.color = old;
+        GUI.Label(new Rect(tx + 56, r.y + 42, 120, 26), Eyeballs.Hex(c), cellLabel);
+        if (GUI.Button(new Rect(tx, r.y + 82, 110, 30), T("Как было", "Default")))
+        {
+            ring.Color = Eyeballs.Parse(Eyeballs.DefaultHex);
+            SkinShowcase.SetIris(ring.Color);
+            SetIris(ring.Color);
+        }
+    }
+    string lastSaved;
+
+    public void SetIris(Color32 c)
+    {
+        Plugin.Iris.Value = lastSaved = Eyeballs.Hex(c);
+        ring.Color = c;
+        SkinShowcase.SetIris(c);
+        Plugin.L.LogInfo($"COOP iris colour chosen: {Plugin.Iris.Value}");
+        SkinSync.OnChosen();
     }
 
     // A loader: a dot running round a circle.
