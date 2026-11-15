@@ -368,6 +368,7 @@ public static class Dyn
         if (Env.Get("CSCCOOP_MUTANT") == "toolskin-puppet") return;
         o.Skins ??= o.Go.GetComponentsInChildren<Skinable>(true);
         byte owner = BelongsTo(o);
+        DropStraySkins(o);
         foreach (var sk in o.Skins)
         {
             if (sk == null) continue;
@@ -384,6 +385,31 @@ public static class Dyn
             finally { ToolSkins.Applying = false; }
         }
     }
+
+    // The game puts the local player's skin on the copy too (when it wakes, and again when the local choice changes),
+    // and a lamp's skin (LampSkinable) is not released when another is set: the copy of another player's lamp wore both
+    // skins, ours and theirs, one or the other showing as it was switched on and off (owner's test; toolskins suite: two
+    // BogatoLamp clones beside the owner's FurnaceTubeLight). Any skin model on it that isn't the one its Skinable now
+    // shows goes.
+    static void DropStraySkins(Obj o)
+    {
+        if (Env.Get("CSCCOOP_MUTANT") == "toolskin-double") return;
+        var keep = new List<Transform>();
+        foreach (var sk in o.Skins) if (sk != null && sk.InstantiatedSkin != null) keep.Add(sk.InstantiatedSkin.transform);
+        foreach (var t in o.Go.GetComponentsInChildren<Transform>(true))
+        {
+            if (t == null || t == o.Go.transform || !t.name.EndsWith("(Clone)", StringComparison.Ordinal)) continue;
+            bool kept = false;
+            foreach (var k in keep) for (var x = t; x != null; x = x.parent) if (x == k) { kept = true; break; }
+            if (kept || t.GetComponentInChildren<MeshRenderer>(true) == null && t.GetComponentInChildren<SkinnedMeshRenderer>(true) == null) continue;   // effects left alone
+            // only the top of a stray model (its parent isn't a clone itself)
+            if (t.parent != null && t.parent != o.Go.transform && t.parent.name.EndsWith("(Clone)", StringComparison.Ordinal)) continue;
+            Plugin.L.LogInfo($"COOP player {BelongsTo(o)}'s {o.Name} {o.Id:X}: removed a stray skin model '{t.name}'");
+            StraySkins++;
+            UnityEngine.Object.Destroy(t.gameObject);
+        }
+    }
+    public static int StraySkins;
 
     // The game dresses every Skinable in the local player's choice, puppets too (when they wake, and when the local
     // choice changes): DressSkins puts their player's back within a second. Not by patching Skinable: TrySetSkin and

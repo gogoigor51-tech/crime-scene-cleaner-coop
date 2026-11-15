@@ -38,8 +38,11 @@ public sealed class ToolLook
     public int Renderers;
     public string SourceName = "";
     public int SkinShown => shownSkin;
-    readonly List<GameObject> useParts = new();   // water stream and the like: shown only while the tool is used
-    static readonly System.Text.RegularExpressions.Regex UsePart = new("water|stream|beam|spray|splash|vfx|particle", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    public int Drawn { get { int n = 0; foreach (var r in root.GetComponentsInChildren<MeshRenderer>()) if (r.enabled) n++; return n; } }   // parts drawn now (not the ones shown only while used)
+    // water stream and the like: shown only while the tool is used. "water" as a word of its own: the water pistols'
+    // own meshes (skin 105, WaterPistol...) were hidden until the player cleaned (owner's test)
+    readonly List<GameObject> useParts = new();
+    static readonly System.Text.RegularExpressions.Regex UsePart = new(@"water|stream|beam|spray|splash|vfx|particle|muzzle", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     public ToolLook(Transform figure, byte player = 0)
     {

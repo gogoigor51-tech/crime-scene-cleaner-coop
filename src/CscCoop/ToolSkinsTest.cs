@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using CoopCore;
 using UnityEngine;
@@ -15,7 +16,8 @@ public partial class Bot
 {
     PortableItem tsBucket;
     GameObject tsBag;
-    PlayerFigure tsLook;   // the host keeps looking at the client's figure until the shot
+    PlayerFigure tsLook;
+    PortableItem tsLamp;   // the host keeps looking at the client's figure until the shot
 
     static string SkinsOn(GameObject go)
     {
@@ -23,6 +25,20 @@ public partial class Bot
         var sb = new StringBuilder();
         foreach (var s in go.GetComponentsInChildren<Skinable>(true)) sb.Append($"{s.skinType}={(s.CurrentSkin != null ? s.CurrentSkin.id : -1)} ");
         return sb.ToString().Trim();
+    }
+
+    // every drawn part of the other player's placed tools, with its skin state
+    static void DumpOthers(string when)
+    {
+        foreach (var p in UnityEngine.Object.FindObjectsOfType<PortableItem>())
+        {
+            if (p == null || !p.name.Contains("(other player)")) continue;
+            var sb = new StringBuilder();
+            foreach (var r in p.GetComponentsInChildren<Renderer>())
+                if (r.enabled && r.gameObject.activeInHierarchy && !(r is ParticleSystemRenderer) && r.GetIl2CppType().Name != "ParticleSystemRenderer") sb.Append(r.name).Append('/').Append(r.sharedMaterial?.name).Append("; ");
+            var sk = p.GetComponentInChildren<Skinable>(true);
+            Plugin.L.LogInfo($"TOOLSKINS {when}: other's '{p.name}' skin {(sk?.CurrentSkin != null ? sk.CurrentSkin.id : -1)} inst '{sk?.InstantiatedSkin?.name}' lamp on {p.GetComponentInChildren<LampController>(true)?.isOn} drawn: {sb}");
+        }
     }
 
     static GameObject OthersBag()
@@ -60,13 +76,18 @@ public partial class Bot
         switch (step)
         {
             case 0 when t > 3:
-                foreach (int id in host ? new[] { 14 } : new[] { 7, 9, 29 })
+                foreach (int id in host ? new[] { 14, 22 } : new[] { 7, 9, 29, 10 })
                 {
                     var d = sc.GetSkinByID(id);
                     try { sc.ChangeToCustomSkin(d); } catch (Exception e) { Plugin.L.LogInfo($"TOOLSKINS skin {id}: {e.Message}"); }
                 }
                 Plugin.L.LogInfo($"TOOLSKINS {(host ? "host" : "client")} chose '{ToolSkins.Mine()}'");
                 if (!host) ToolLook.ForceTool = 19;   // the akimbo sponge
+                {
+                    // a work lamp (tool 42) in the inventory to put down too
+                    var inv = Inv; var lamp = inv?.ItemsContainer?.toolDatas?.ToArray().FirstOrDefault(td => td != null && td.id == 42);
+                    if (lamp != null && !inv.Slots.ToArray().Any(sl => sl.Item != null && sl.Item.id == 42)) inv.AddItem(lamp);
+                }
                 try { InventoryController.Instance.Equip(ItemCategory.bucket, 0); } catch (Exception e) { Plugin.L.LogInfo("TOOLSKINS equip: " + e.Message); }
                 step = 1; break;
             case 1 when t > 7:
@@ -82,6 +103,20 @@ public partial class Bot
                 }
                 tsBag = MakeBag(w.Player.transform.position + fwd * 2.2f + right * (host ? 0.6f : -0.6f) + Vector3.up * 0.5f);
                 Plugin.L.LogInfo($"TOOLSKINS {(host ? "host" : "client")} put down {(tsBucket != null ? tsBucket.name : "NO BUCKET")} and {(tsBag != null ? "a bag" : "NO BAG")}");
+                step = 4_1; break;
+            case 4_1 when t > 9:
+                try { var slot = Inv.Slots.ToArray().FirstOrDefault(sl => sl.Item != null && sl.Item.id == 42); if (slot != null) InventoryController.Instance.EquipItem(ItemCategory.lamp, slot); } catch (Exception e) { Plugin.L.LogInfo("TOOLSKINS lamp equip: " + e.Message); }
+                step = 4_2; break;
+            case 4_2 when t > 11:
+                tsLamp = UnityEngine.Object.FindObjectsOfType<PortableItem>().FirstOrDefault(p => p != null && !p.name.Contains("(other player)") && p.GetComponentInChildren<LampController>(true) != null && p.gameObject.activeInHierarchy);
+                if (tsLamp != null)
+                {
+                    if (w.Grabber.GrabbedRb != null) w.Grabber.TryRelease();
+                    var spot = w.Player.transform.position + w.Player.transform.forward * 1.5f + w.Player.transform.right * (host ? 1.4f : -1.4f);
+                    if (Physics.Raycast(spot + Vector3.up, Vector3.down, out var hit, 3f, ~0, QueryTriggerInteraction.Ignore)) spot = hit.point;
+                    tsLamp.transform.SetPositionAndRotation(spot + Vector3.up * 0.05f, Quaternion.identity);
+                }
+                Plugin.L.LogInfo($"TOOLSKINS {(host ? "host" : "client")} put down {(tsLamp != null ? tsLamp.name : "NO LAMP")}");
                 step = 2; break;
             case 2 when t > 40:
                 // the host goes to a free spot in the first job's yard next to the client (from elsewhere a car or the fence
@@ -100,6 +135,8 @@ public partial class Bot
                     Plugin.L.LogInfo($"TOOLSKINS host sees the client hold '{tsLook.Tool.SourceName}' skin {tsLook.Tool.SkinShown} renderers {tsLook.Tool.Renderers} left hand {tsLook.Tool.HasLeft}");
                 step = 3; break;
             case 3 when t > 51:
+                if (host) { DumpOthers("lamp off"); }
+                else if (tsLamp != null) { var l = tsLamp.GetComponentInChildren<LampController>(true); if (l != null && !l.isOn) l.Interact(); Plugin.L.LogInfo($"TOOLSKINS client switched its lamp on: {l?.isOn}"); }
                 step = 30; break;
             case 30 when t > 54:
                 // pictures from a camera of our own (FigureTest.Shot: the yard is cramped, and the bodies' yaw lags)
@@ -135,9 +172,15 @@ public partial class Bot
                 if (host) { string dir = Env.Get("CSCCOOP_SHOT_DIR"); if (dir != "") ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "shot_toolskins_host.png")); }
                 step = 4; break;
             case 4 when t > 58:
+                if (host) DumpOthers("lamp on");
+                // the water pistols (105) for the akimbo sponge: shown in the hand, not only while used
+                if (!host) { try { sc.ChangeToCustomSkin(sc.GetSkinByID(105)); } catch { } }
+                step = 40; break;
+            case 40 when t > 75:
+                if (host && tsLook != null) Plugin.L.LogInfo($"TOOLSKINS host sees the client hold '{tsLook.Tool.SourceName}' skin {tsLook.Tool.SkinShown} renderers {tsLook.Tool.Renderers} drawn {tsLook.Tool.Drawn} left hand {tsLook.Tool.HasLeft} (pistols)");
                 if (!host) Plugin.L.LogInfo($"TOOLSKINS client yaw {w.Player.transform.eulerAngles.y:F0}");
                 ToolLook.ForceTool = short.MinValue;
-                foreach (var ty in new[] { SkinType.dualSponge, SkinType.bucket, SkinType.garbageBag }) try { sc.ChangeToDefaultSkin(ty); } catch { }
+                foreach (var ty in new[] { SkinType.dualSponge, SkinType.bucket, SkinType.garbageBag, SkinType.workLamp }) try { sc.ChangeToDefaultSkin(ty); } catch { }
                 Plugin.L.LogInfo("TOOLSKINS dump done");
                 step = 5; break;
         }

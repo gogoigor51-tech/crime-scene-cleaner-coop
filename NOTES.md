@@ -583,6 +583,16 @@ victims' bodies" only on the host, a restart only on the host.
   defaultMeshRenderers and defaultSkinElements hidden, the skin's decals on the tool's SkinableDecal parts. The
   akimbo sponge's second sponge (DualSponge.secondSponge; the gloves' left one is a decal on it) is a second copy in
   the figure's left hand, the right hand's hold mirrored, the left hand reaching for it.
+- Owner's test of test4: (1) the water pistols (skin 105) weren't in the other player's hands until they cleaned:
+  their meshes (WaterPistol...) matched ToolLook's "only while used" names (water); now "water" counts only as a word
+  of its own, muzzle flashes added. (2) placed tools wore both skins, lamps the viewer's when off and the owner's when
+  on: the game instantiates the local choice on the copy and a lamp's skin (LampSkinable) isn't released when another
+  is set (two BogatoLamp clones beside the owner's FurnaceTubeLight). Dyn.DropStraySkins removes, once a second, any
+  skin model (a "(Clone)" with meshes) on another player's tool or bag that isn't the one its Skinable shows. The
+  toolskins suite now also puts down a work lamp (client: Furnace 10, host: Bogo 22), switches it on, and holds the
+  water pistols: 9/9 (-QuitAfter 95); mutant toolskin-double 7/9 (both lamp checks). lamps, toolcarry, figure,
+  washer, bagmerge pass (bagmerge failed once: the client's bag fell through the floor before the drop; then a
+  stalled start; then 6/6).
 - toolskins suite (run-pair -Test toolskins -QuitAfter 80, first job): the client chooses boxing gloves (7), the
   cardboard bucket (9) and the black hole bag (29) and holds the akimbo sponge, the host the Bogo bucket (14); each
   puts its bucket down and makes a bag. PASS 6/6 (each sees the other's bucket and bag in the other's skin, its own
