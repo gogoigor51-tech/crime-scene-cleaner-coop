@@ -553,6 +553,11 @@ victims' bodies" only on the host, a restart only on the host.
   one more than the other in a picture (wall-eyed). Each eyeball now turns sideways to look through the middle of
   its opening (4-10 degrees). Also both eyes' lid edges now go to the less open of the two (EYEEVEN; Daughter new
   measured 87 against 39 degrees on one lid). 23 faces, skins 5/5.
+- That broke the Art people (owner: cross-eyed): the cut edge's mean is biased by where the cut falls (Art: -0.20r,
+  turned outward 9 degrees). Measured from the corners (the edge's ends), every opening is centred on its bone within
+  0.1r. Now both eyes turn alike (the two eyes' inward offsets averaged, at most 6 degrees) plus 3 degrees inward
+  (looking at someone about a metre away): seen from close in front, eyes looking at infinity have their irises
+  toward the outer corners, which was AmberGirl02's look. 23 faces even, skins 5/5.
 
 ### Other players' tool levels and skins (2026-11-09)
 - Owner's request: a friend's tools should look like theirs (level and the game's tool skin), on the held tool, their

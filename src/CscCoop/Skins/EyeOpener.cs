@@ -170,6 +170,7 @@ public static class EyeOpener
             // The eyeballs: placed here, where the skin is (the head bone's own space, from its bind pose), not from
             // the copy's bones at run time: on some people (Art BlackFemale01) those put the eyeballs out of the face.
             // As big as fits behind where the shut lids were, at most a fifth of the eye distance.
+            float aim = Env.Get("CSCCOOP_MUTANT") == "eyes-straight" ? 0 : Aim(d, a, eyeL.c, eyeR.c, eyeL.front, right, up, fwd, radius);
             if (r.Bones[h] >= 0)
                 foreach (var e in new[] { eyeL, eyeR })
                 {
@@ -180,29 +181,11 @@ public static class EyeOpener
                     if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEFIT '{d.Person?.Display}' front {e.front / radius:F2}r skin inside {inside / radius:F2}r -> eyeball {big / radius:F2}r"));
                     if (Env.Get("CSCCOOP_MUTANT") == "eyes-bone-placed") break;
                     var bind = BindPose(a, h);
-                    // The eye bone sits outward of the middle of the opening (the corners aren't round the bone), so
-                    // looking straight ahead the irises sat toward the outer corners, one more than the other in a
-                    // picture: the eyes looked uneven, wall-eyed (owner's test, AmberGirl02). Each eye looks through the
-                    // middle of its opening (sideways only; up and down stays straight).
-                    var look = fwd;
-                    if (Env.Get("CSCCOOP_MUTANT") != "eyes-straight")
-                    {
-                        float sx = 0, sn = 0;
-                        for (int v = 0; v < a.Vertices; v++)
-                        {
-                            if (!edge[v]) continue;
-                            var q = EyeOpener.P(a, v) - e.c;
-                            if (q.magnitude > radius * 2.5f || Vector3.Dot(q, fwd) <= 0) continue;
-                            sx += Vector3.Dot(q, right); sn++;
-                        }
-                        if (sn > 0)
-                        {
-                            float mid = sx / sn;   // the opening's middle, sideways from the bone
-                            float ang = Mathf.Clamp(Mathf.Atan2(mid, e.front > 0 && e.front < radius * 5 ? e.front : radius * 1.3f) * Mathf.Rad2Deg, -15, 15);
-                            look = Quaternion.AngleAxis(ang, up) * fwd;
-                            if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEAIM '{d.Person?.Display}' opening middle {mid / radius:F2}r sideways -> turned {ang:F1} deg"));
-                        }
-                    }
+                    // The irises looked toward the outer corners on some people (AmberGirl02): the eye bone isn't in the
+                    // middle of the opening. Measured per eye (the mean of the cut edge) it was wrong on others (the Art
+                    // people turned cross-eyed, owner's test). Now from the corners (the edge's ends), and the same turn
+                    // for both eyes, mirrored: the two eyes always look alike (Aim).
+                    var look = Quaternion.AngleAxis(e == eyeL ? aim : -aim, up) * fwd;
                     d.Eyes.Add(new EyeFit
                     {
                         Head = r.Bones[h], Pos = bind.MultiplyPoint3x4(e.c),
@@ -214,6 +197,35 @@ public static class EyeOpener
             LastMoved += moved;
             done.Add(r.Mesh);
         }
+    }
+
+    // How far both eyes turn inward (toward each other; negative: outward) to look through the middle of their
+    // openings: each opening's middle is between its corners (the cut edge's ends, sideways); the two eyes' inward
+    // offsets averaged, at most 6 degrees.
+    public static float Converge = 3;
+    static float Aim(PersonData d, MeshArrays a, Vector3 cl, Vector3 cr, float front, Vector3 right, Vector3 up, Vector3 fwd, float r)
+    {
+        float Mid(Vector3 c)
+        {
+            float lo = float.MaxValue, hi = float.MinValue;
+            for (int v = 0; v < a.Vertices; v++)
+            {
+                if (!edge[v]) continue;
+                var q = P(a, v) - c;
+                if (q.magnitude > r * 2.5f || Vector3.Dot(q, fwd) <= 0) continue;
+                float x = Vector3.Dot(q, right); lo = Mathf.Min(lo, x); hi = Mathf.Max(hi, x);
+            }
+            return lo > hi ? float.NaN : (lo + hi) * 0.5f;
+        }
+        float ml = Mid(cl), mr = Mid(cr);   // +right is toward the other eye for the left one
+        if (float.IsNaN(ml) || float.IsNaN(mr)) return 0;
+        float inward = (ml - mr) * 0.5f;
+        float depth = front > 0 && front < r * 5 ? front : r * 1.3f;
+        // plus a little convergence, as eyes looking at someone a metre away: looking at infinity, the irises (behind the
+        // lid edge) seen from close in front sat toward the outer corners (AmberGirl02 looked uneven)
+        float ang = Mathf.Clamp(Mathf.Atan2(inward, depth) * Mathf.Rad2Deg, -6, 6) + (Env.Get("CSCCOOP_MUTANT") == "eyes-parallel" ? 0 : Converge);
+        if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEAIM '{d.Person?.Display}' opening middles {ml / r:F2}r / {mr / r:F2}r -> both turned {ang:F1} deg inward"));
+        return ang;
     }
 
     // The nearest the skin (a kept triangle's vertex, in front of the eye, not the lashes) comes to the eye's centre.
