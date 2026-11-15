@@ -518,6 +518,26 @@ victims' bodies" only on the host, a restart only on the host.
   client's PickUp is refused; the host's PickUp works and it is gone on both. PASS 7/7; mutant tool-locked (the 0.4.2
   rule) FAIL 4/7. trash 8/8.
 
+### Eyes, round three (2026-11-15)
+- Owner's screenshots of 0.4.4-test4 (2026-11-15): lashes standing like a comb over Art AsianFemale01/02 and
+  AmberGirl05, Art BlackMale01's eyes looking shut, dark patches round the eyes of Daughter/Husband/wife new, a skin
+  flap under Husband new's left eye. Causes and fixes (EyeOpener, SkinFiles):
+  - The Art rows are one strip from corner to corner; turned whole, it came off the lid (the lid opens far in the
+    middle, hardly at the corners). Strips wider than 0.8 radii are now bent in 8 slices along the lid, each carried
+    by its own place on the lid and turned about its own root.
+  - Art BlackMale01: a triangle from the opened upper lid to its thick lower lid (1.9 radii out, past the 1.8 moved)
+    was never cut and hung across the eye (found by casting a ray into the opening). Skin within 8 degrees of the slit
+    out to 2.4 radii now counts as its lid's for the cut.
+  - The "new" people's eyelash material (Ga_Eyelash_Pbr) is opaque (queue 2000, no alpha test): cards turned out were
+    dark sheets. Eyelash materials are now alpha-tested (cutoff 0.4, queue 2450).
+  - Husband new: a stray 24-vertex lash bit under the lower row moved the slit to -23 degrees; the slit now leaves at
+    least 30% of lash vertices on each side. Where an eyelash material exists, only its pieces are lashes (his
+    swollen lower lid's loose skin pieces were turned out as lashes). Rows 2.5 degrees apart now count as two rows
+    (Guest AsianMale's were 3 apart and its upper lashes went down).
+  - Tried and dropped: leaving out the small piece that wraps round each eye (the eye shadow card) - on the "new"
+    people that rule took real skin pieces too.
+  - 23 faces checked from the front (the reported ten and earlier ones): all open, lashes on the lids. skins 5/5.
+
 ### Other players' tool levels and skins (2026-11-09)
 - Owner's request: a friend's tools should look like theirs (level and the game's tool skin), on the held tool, their
   buckets, lamps and trash bags. toolskinprobe (first job): each tool level is its own ToolData with its own prefab

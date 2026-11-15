@@ -217,6 +217,16 @@ public static class SkinFiles
             if (prop == "_EmissionMap") mat.EnableKeyword("_EMISSION");
         }
         foreach (var k in md.Keywords.Split(' ', StringSplitOptions.RemoveEmptyEntries)) mat.EnableKeyword(k);
+        // Eyelash cards drawn opaque (the "new" people's Ga_Eyelash_Pbr: queue 2000, no alpha test): on a shut eye they
+        // lie in the skin, turned out with the opened lids they were dark sheets over and under the eyes. Cut out by
+        // their texture's alpha as other people's lashes are.
+        if (md.Name.IndexOf("eyelash", StringComparison.OrdinalIgnoreCase) >= 0 && !md.Keywords.Contains("_ALPHATEST_ON") && Env.Get("CSCCOOP_MUTANT") != "eyes-lash-opaque")
+        {
+            mat.EnableKeyword("_ALPHATEST_ON"); mat.SetFloat("_AlphaClip", 1);
+            if (!md.Floats.ContainsKey("_Cutoff") || md.Floats["_Cutoff"] <= 0.01f) mat.SetFloat("_Cutoff", 0.4f);
+            mat.renderQueue = 2450;
+            return mat;
+        }
         if (md.Keywords.Contains("_ALPHATEST_ON")) { mat.SetFloat("_AlphaClip", 1); if (!md.Floats.ContainsKey("_Cutoff")) mat.SetFloat("_Cutoff", 0.5f); }
         if (md.RenderQueue >= 0) mat.renderQueue = md.RenderQueue;
         return mat;

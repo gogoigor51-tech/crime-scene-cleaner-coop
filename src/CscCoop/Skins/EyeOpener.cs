@@ -55,6 +55,18 @@ public static class EyeOpener
             if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Dump(d, a, L, right, up, fwd, ipd * 0.2f);
             var side = new sbyte[a.Vertices];   // +1 upper lid moved, -1 lower lid moved
             var piece = Pieces(a); pieceOf = piece;
+            // Where the lashes have their own material (the "new" people's Ga_Eyelash_Pbr), only pieces drawn with it
+            // are lashes: Husband new's swollen lower lid is small loose skin pieces, which were turned out as lashes and
+            // hung under the eye as flaps.
+            lashVert = null;
+            for (int sm = 0; sm < a.SubMeshes.Length && sm < r.Materials.Length; sm++)
+            {
+                int mi = r.Materials[sm];
+                if (mi < 0 || mi >= d.Materials.Count || d.Materials[mi].Name.IndexOf("eyelash", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (Env.Get("CSCCOOP_MUTANT") == "eyes-lash-any") break;
+                lashVert ??= new bool[a.Vertices];
+                foreach (var v in a.SubMeshes[sm]) lashVert[v] = true;
+            }
             int moved = OpenEye(d, a, piece, L, right, up, fwd, radius, side);
             var eyeL = (c: L, slit: LastSlit, front: LastFront * radius);
             moved += OpenEye(d, a, piece, R, right, up, fwd, radius, side);
@@ -76,6 +88,44 @@ public static class EyeOpener
                         keep.Add(tri[t]); keep.Add(tri[t + 1]); keep.Add(tri[t + 2]);
                     }
                     a.SubMeshes[sm] = keep.ToArray();
+                }
+            if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
+                foreach (var e in new[] { eyeL, eyeR })
+                {
+                    var inOpening = new Dictionary<int, int>();
+                    for (int v = 0; v < a.Vertices; v++)
+                    {
+                        Local(a, v, e.c, right, up, fwd, out var x, out var phi, out var dist, out var z);
+                        if (z > 0 && Mathf.Abs(x) < radius * 0.5f && Mathf.Abs(phi - e.slit) < 8 && dist < radius * 1.6f && side[v] == 0)
+                            inOpening[piece[v]] = inOpening.TryGetValue(piece[v], out var n) ? n + 1 : 1;
+                    }
+                    var cnt = new Dictionary<int, int>(); foreach (var g in piece) cnt[g] = cnt.TryGetValue(g, out var n2) ? n2 + 1 : 1;
+                    var sb = new System.Text.StringBuilder();
+                    foreach (var kv in inOpening) sb.Append($"piece {kv.Key} ({cnt[kv.Key]} verts) {kv.Value} in; ");
+                    Plugin.L.LogInfo($"EYEOPENING '{d.Person?.Display}' unmoved in the opening: {sb}");
+                    // what a look straight into the opening (along the slit) hits
+                    var dirIn = -(Quaternion.AngleAxis(-e.slit, right) * fwd);
+                    var from = e.c - dirIn * radius * 4;
+                    for (int sm = 0; sm < a.SubMeshes.Length; sm++)
+                    {
+                        var tri = a.SubMeshes[sm];
+                        for (int t = 0; t + 2 < tri.Length; t += 3)
+                        {
+                            Vector3 p0 = EyeOpener.P(a, tri[t]), p1 = EyeOpener.P(a, tri[t + 1]), p2 = EyeOpener.P(a, tri[t + 2]);
+                            var n = Vector3.Cross(p1 - p0, p2 - p0); float den = Vector3.Dot(n, dirIn);
+                            if (Mathf.Abs(den) < 1e-12f) continue;
+                            float k = Vector3.Dot(n, p0 - from) / den; if (k <= 0) continue;
+                            var hp = from + dirIn * k;
+                            if (Vector3.Dot(Vector3.Cross(p1 - p0, hp - p0), n) < 0 || Vector3.Dot(Vector3.Cross(p2 - p1, hp - p1), n) < 0 || Vector3.Dot(Vector3.Cross(p0 - p2, hp - p2), n) < 0) continue;
+                            var hs = new System.Text.StringBuilder();
+                            foreach (var v in new[] { tri[t], tri[t + 1], tri[t + 2] })
+                            {
+                                Local(a, v, e.c, right, up, fwd, out var x, out var phi, out var dist, out var z);
+                                hs.Append(System.FormattableString.Invariant($"[x {x / radius:F2} phi {phi:F0} d {dist / radius:F2} side {side[v]} piece {cnt[piece[v]]}] "));
+                            }
+                            Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEHIT '{d.Person?.Display}' sub {sm} at {(hp - e.c).magnitude / radius:F2}r: {hs}"));
+                        }
+                    }
                 }
             if (cut > 0 && Env.Get("CSCCOOP_MUTANT") != "eyes-sharp")
                 foreach (var e in new[] { eyeL, eyeR }) SmoothEdge(a, side, e.c, e.slit, right, up, fwd, radius);
@@ -297,10 +347,11 @@ public static class EyeOpener
         var rows = new List<Lash>();
         foreach (var kv in lashes)
         {
-            if (outside.Contains(kv.Key) || kv.Value.Verts.Count < 20) continue;
+            if (kv.Value.Verts.Count < 20 || lashVert != null && !lashVert[kv.Value.Verts[0]]) continue;
             float lo = 999, hi = -999, mx = 0;
             foreach (var v in kv.Value.Verts) { Local(a, v, c, right, up, fwd, out var x, out var phi, out _, out _); lo = Mathf.Min(lo, phi); hi = Mathf.Max(hi, phi); mx += x; }
             mx /= kv.Value.Verts.Count;
+            if (outside.Contains(kv.Key)) continue;
             if (hi - lo < 50 && Mathf.Abs(mx) < r * 0.6f && kv.Value.MinDist > r * 0.9f)
             {
                 // A strip runs along the lid: its root is the middle of its edge nearest the eye, not the one vertex
@@ -321,14 +372,30 @@ public static class EyeOpener
         float slit = Slit;
         if (rows.Count >= 2 && Env.Get("CSCCOOP_MUTANT") != "eyes-fixed-slit")
         {
-            // every card is there twice (both faces) and a row can be several cards: a gap under 4 degrees is within
+            // every card is there twice (both faces) and a row can be several cards: a gap under 2.5 degrees is within
+            // (4 before: Guest AsianMale's rows are 3 degrees apart, its upper lashes went down with the lower lid)
             // one row, so with one row found the fixed slit stays
             rows.Sort((p, q) => p.RootPhi.CompareTo(q.RootPhi));
-            int cut = 1; float gap = -1;
-            for (int i = 1; i < rows.Count; i++) if (rows[i].RootPhi - rows[i - 1].RootPhi > gap) { gap = rows[i].RootPhi - rows[i - 1].RootPhi; cut = i; }
-            if (gap >= 4) slit = (rows[cut].RootPhi + rows[cut - 1].RootPhi) * 0.5f;
+            // Each side keeps at least 30% of the lash vertices: a stray bit far under the lower row (Husband new, 24
+            // vertices at -29 degrees) made the widest gap below it, the slit went to -23, and the lid opened wrong.
+            int cut = 1; float gap = -1, total = 0, below = 0;
+            foreach (var l in rows) total += l.Verts.Count;
+            bool balanced = Env.Get("CSCCOOP_MUTANT") != "eyes-slit-stray";
+            for (int i = 1; i < rows.Count; i++)
+            {
+                below += rows[i - 1].Verts.Count;
+                if (balanced && (below < total * 0.3f || total - below < total * 0.3f)) continue;
+                if (rows[i].RootPhi - rows[i - 1].RootPhi > gap) { gap = rows[i].RootPhi - rows[i - 1].RootPhi; cut = i; }
+            }
+            if (gap >= 2.5f) slit = (rows[cut].RootPhi + rows[cut - 1].RootPhi) * 0.5f;
         }
         LastSlit = slit;
+        if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var l in rows) sb.Append(System.FormattableString.Invariant($"{l.RootPhi:F1}@{l.RootX / r:F2}r/{l.Verts.Count} "));
+            Plugin.L.LogInfo(System.FormattableString.Invariant($"EYESLIT '{d.Person?.Display}' slit {slit:F1}, rows {sb}"));
+        }
         // where the shut lids are straight in front of the eye bone, along the slit: the eyeball must stay behind it
         float front = float.MaxValue;
         for (int v = 0; v < a.Vertices; v++)
@@ -345,6 +412,10 @@ public static class EyeOpener
         // the lashes: each card turned whole by what its root's lid edge does
         foreach (var l in rows)
         {
+            // A row that is one wide strip (the Art people, AmberGirl05: one card from corner to corner) can't turn
+            // whole: the lid opens far in the middle and hardly at the corners, so the strip came off the lid, its lashes
+            // standing over the eye like a comb, or its dark base hanging over the eye (Art BlackMale01 looked shut).
+            if (Env.Get("CSCCOOP_MUTANT") != "eyes-lash-rigid" && Bend(d, a, l, c, right, up, fwd, r, slit)) { moved += l.Verts.Count; continue; }
             float w = 1 - Smooth(r * 0.75f, r * 1.3f, Mathf.Abs(l.RootX));
             float delta = (Target(l.RootPhi, slit) - l.RootPhi) * w;
             var rot = Quaternion.AngleAxis(-delta, right);
@@ -378,6 +449,11 @@ public static class EyeOpener
             // lid's edge, the fold hung over the opened eye (owner: bumps in the middle of SC Mother's upper lids).
             bool upperLid = phi >= slit && Env.Get("CSCCOOP_MUTANT") != "eyes-thin-lid";
             float near0 = upperLid ? 1.75f : 1.35f, far0 = upperLid ? 2.4f : 1.8f;
+            // Skin right at the slit but beyond the moved lid (a thick lower lid, Art BlackMale01: 1.9 radii out) stays
+            // where it is, yet counts as its lid's for the cut: a triangle from it to the opened upper lid hung across the
+            // eye as a sheet of skin, and the eye looked shut.
+            if (z > 0 && dist > r * far0 && dist <= r * 2.4f && Mathf.Abs(x) < r * 1.3f && Mathf.Abs(phi - slit) < 8 && Env.Get("CSCCOOP_MUTANT") != "eyes-thick-lid")
+            { side[v] = (sbyte)(phi >= slit ? 1 : -1); continue; }
             if (z <= 0 || dist < r * 0.85f || dist > r * far0 || Mathf.Abs(x) > r * 1.3f || phi > Top || phi < Bottom) continue;
             float w = (1 - Smooth(r * 0.75f, r * 1.3f, Mathf.Abs(x))) * (1 - Smooth(r * near0, r * far0, dist));
             if (w <= 0.001f) continue;
@@ -390,8 +466,75 @@ public static class EyeOpener
         return moved;
     }
 
+    // A wide lash strip, bent along the lid: cut across its length in slices, each slice carried by what the lid does
+    // at that place and turned about its own root as a card is; between slice centres the two are blended. False for a
+    // strip narrower than 0.8 radii (turned whole, as before).
+    static bool Bend(PersonData d, MeshArrays a, Lash l, Vector3 c, Vector3 right, Vector3 up, Vector3 fwd, float r, float slit)
+    {
+        float lo = float.MaxValue, hi = float.MinValue;
+        foreach (var v in l.Verts) { float x = Vector3.Dot(P(a, v) - c, right); lo = Mathf.Min(lo, x); hi = Mathf.Max(hi, x); }
+        if (hi - lo < r * 0.8f) return false;
+        const int N = 8;
+        float step = (hi - lo) / N;
+        var near = new float[N]; var far = new float[N];
+        for (int i = 0; i < N; i++) { near[i] = float.MaxValue; far[i] = 0; }
+        int Bin(float x) => Mathf.Clamp((int)((x - lo) / step), 0, N - 1);
+        foreach (var v in l.Verts)
+        {
+            var p = P(a, v); int i = Bin(Vector3.Dot(p - c, right)); float dd = (p - c).magnitude;
+            near[i] = Mathf.Min(near[i], dd); far[i] = Mathf.Max(far[i], dd);
+        }
+        var rootSum = new Vector3[N]; var tipSum = new Vector3[N]; var rn = new int[N]; var tn = new int[N];
+        foreach (var v in l.Verts)
+        {
+            var p = P(a, v); int i = Bin(Vector3.Dot(p - c, right)); float dd = (p - c).magnitude, span = far[i] - near[i];
+            if (dd <= near[i] + span * 0.25f) { rootSum[i] += p; rn[i]++; }
+            if (dd >= far[i] - span * 0.25f) { tipSum[i] += p; tn[i]++; }
+        }
+        // per slice: where its root goes, and the two turns (with the lid, then about the root)
+        var ok = new bool[N]; var xs = new float[N]; var carry = new float[N]; var swing = new float[N]; var root = new Vector3[N];
+        bool upper = l.RootPhi >= slit;
+        float want = upper ? UpperLash : LowerLash;
+        for (int i = 0; i < N; i++)
+        {
+            if (rn[i] == 0 || tn[i] == 0) continue;
+            var rp = rootSum[i] / rn[i]; var tp = tipSum[i] / tn[i];
+            var b = rp - c;
+            float x = Vector3.Dot(b, right), phi = Mathf.Atan2(Vector3.Dot(b, up), Vector3.Dot(b, fwd)) * Mathf.Rad2Deg;
+            float w = 1 - Smooth(r * 0.75f, r * 1.3f, Mathf.Abs(x));
+            // a slice goes with its row's lid, even where the strip's curve dips across the slit
+            float lid = upper ? Mathf.Max(phi, slit + 0.5f) : Mathf.Min(phi, slit - 0.5f);
+            float delta = (Target(lid, slit) - lid) * w;
+            var rot = Quaternion.AngleAxis(-delta, right);
+            var dir = rot * (tp - rp);
+            float now = Mathf.Atan2(Vector3.Dot(dir, up), Vector3.Dot(dir, fwd)) * Mathf.Rad2Deg;
+            ok[i] = true; xs[i] = x; carry[i] = delta; swing[i] = Mathf.DeltaAngle(now, want) * w; root[i] = c + rot * b;
+        }
+        var have = new List<int>();
+        for (int i = 0; i < N; i++) if (ok[i]) have.Add(i);
+        if (have.Count == 0) return false;
+        foreach (var v in l.Verts)
+        {
+            var p = P(a, v); float x = Vector3.Dot(p - c, right);
+            // the two slice centres around x (or the nearest at the ends)
+            int i0 = have[0], i1 = have[0];
+            foreach (var i in have) { if (xs[i] <= x) i0 = i; if (xs[i] >= x) { i1 = i; break; } }
+            if (xs[i0] > x) i0 = i1;
+            if (xs[i1] < x) i1 = i0;
+            float t = i0 == i1 ? 0 : Mathf.Clamp01((x - xs[i0]) / (xs[i1] - xs[i0]));
+            float dl = Mathf.Lerp(carry[i0], carry[i1], t), sw = Mathf.Lerp(swing[i0], swing[i1], t);
+            var rt = Vector3.Lerp(root[i0], root[i1], t);
+            Turn(a, v, c, Quaternion.AngleAxis(-dl, right));   // normals turn too
+            Turn(a, v, rt, Quaternion.AngleAxis(-sw, right));
+        }
+        if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
+            Plugin.L.LogInfo(System.FormattableString.Invariant($"EYELASH '{d.Person?.Display}' {l.Verts.Count}v wide strip {(hi - lo) / r:F2}r {(upper ? "upper" : "lower")}: {have.Count} slices, carried {carry[have[0]]:F1}..{carry[have[have.Count / 2]]:F1}, turned {swing[have[0]]:F1}..{swing[have[have.Count / 2]]:F1}"));
+        return true;
+    }
+
     const float Top = 75, Bottom = -65;
     public static float LastSlit, LastTilt, LastFront;
+    static bool[] lashVert;   // vertices drawn with an eyelash material (null: the mesh has none)
 
     // Where a lid point at phi goes: [slit, Top] -> [slit + upper opening, Top], [Bottom, slit] -> [Bottom, slit + lower].
     static float Target(float phi, float slit)
