@@ -537,6 +537,17 @@ victims' bodies" only on the host, a restart only on the host.
   - Tried and dropped: leaving out the small piece that wraps round each eye (the eye shadow card) - on the "new"
     people that rule took real skin pieces too.
   - 23 faces checked from the front (the reported ten and earlier ones): all open, lashes on the lids. skins 5/5.
+- Owner's second look (crops of the test sheet: Daughter new, PO Man01, SC Mother - uneven, staring, a band):
+  - The painted iris was 0.40 of the eyeball across, a human one is about 0.49 (11.7 of 24 mm): the whole iris showed
+    with white all round, a stare. Now 0.48, the pupil 0.4 of it.
+  - PO Man01's left eye: the two rows' roots were within a degree (-14.8, -13.4), no gap, the slit stayed at -4 and the
+    upper lashes and lid went down (an uneven pair). Rows with no gap are now told apart by where they point (a gap of
+    10 degrees or more in direction), the slit at their roots' mean.
+  - Daughter new: only the lower row is found; the fixed slit at -4 lay 20 degrees above it, and the bottom of the
+    upper lid went down with the lower: a band across the eye. With one row the slit is 5 degrees above a lower row
+    (pointing down, or rooted below -15) or below an upper one. Small pieces of the eyelash material that aren't lash
+    rows (the wet line along the lid) are left out near the eyes.
+  - 23 faces again: all even, no bands; small dark notches stay at some inner corners. skins 5/5.
 
 ### Other players' tool levels and skins (2026-11-09)
 - Owner's request: a friend's tools should look like theirs (level and the game's tool skin), on the held tool, their

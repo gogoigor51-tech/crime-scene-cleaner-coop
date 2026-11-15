@@ -58,7 +58,7 @@ public static class EyeOpener
             // Where the lashes have their own material (the "new" people's Ga_Eyelash_Pbr), only pieces drawn with it
             // are lashes: Husband new's swollen lower lid is small loose skin pieces, which were turned out as lashes and
             // hung under the eye as flaps.
-            lashVert = null;
+            lashVert = null; rowPieces.Clear();
             for (int sm = 0; sm < a.SubMeshes.Length && sm < r.Materials.Length; sm++)
             {
                 int mi = r.Materials[sm];
@@ -74,7 +74,7 @@ public static class EyeOpener
             // The two lids share the vertices where they meet, so sliding them apart only stretched the skin over the
             // eye. The triangles that join an upper-lid vertex to a lower-lid one are the stretched ones: without them
             // there is an opening, and the eyeball behind it shows.
-            int cut = 0;
+            int cut = 0, dropped = 0;
             edge = new bool[a.Vertices];
             if (Env.Get("CSCCOOP_MUTANT") != "eyes-stretched")
                 for (int sm = 0; sm < a.SubMeshes.Length; sm++)
@@ -82,6 +82,11 @@ public static class EyeOpener
                     var tri = a.SubMeshes[sm]; var keep = new List<int>(tri.Length);
                     for (int t = 0; t + 2 < tri.Length; t += 3)
                     {
+                        // Small pieces drawn with the eyelash material that aren't lash rows (Daughter new: the wet line
+                        // along the lid, a few vertices each): half on the opened lid, half where they were, they lay
+                        // across the eye as a band. Left out near the eyes.
+                        if (lashVert != null && lashVert[tri[t]] && !rowPieces.Contains(piece[tri[t]]) && Env.Get("CSCCOOP_MUTANT") != "eyes-lash-bits"
+                            && Mathf.Min((EyeOpener.P(a, tri[t]) - L).magnitude, (EyeOpener.P(a, tri[t]) - R).magnitude) < radius * 2.5f) { dropped++; continue; }
                         int s0 = side[tri[t]], s1 = side[tri[t + 1]], s2 = side[tri[t + 2]];
                         bool hi = s0 > 0 || s1 > 0 || s2 > 0, lo = s0 < 0 || s1 < 0 || s2 < 0;
                         if (hi && lo) { cut++; edge[tri[t]] = edge[tri[t + 1]] = edge[tri[t + 2]] = true; continue; }
@@ -103,8 +108,10 @@ public static class EyeOpener
                     var sb = new System.Text.StringBuilder();
                     foreach (var kv in inOpening) sb.Append($"piece {kv.Key} ({cnt[kv.Key]} verts) {kv.Value} in; ");
                     Plugin.L.LogInfo($"EYEOPENING '{d.Person?.Display}' unmoved in the opening: {sb}");
-                    // what a look straight into the opening (along the slit) hits
-                    var dirIn = -(Quaternion.AngleAxis(-e.slit, right) * fwd);
+                    // what looks into the opening (along the slit and above and below it) hit
+                    foreach (float look in new[] { -12f, -6f, 0f, 6f })
+                    {
+                    var dirIn = -(Quaternion.AngleAxis(-(e.slit + look), right) * fwd);
                     var from = e.c - dirIn * radius * 4;
                     for (int sm = 0; sm < a.SubMeshes.Length; sm++)
                     {
@@ -123,8 +130,9 @@ public static class EyeOpener
                                 Local(a, v, e.c, right, up, fwd, out var x, out var phi, out var dist, out var z);
                                 hs.Append(System.FormattableString.Invariant($"[x {x / radius:F2} phi {phi:F0} d {dist / radius:F2} side {side[v]} piece {cnt[piece[v]]}] "));
                             }
-                            Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEHIT '{d.Person?.Display}' sub {sm} at {(hp - e.c).magnitude / radius:F2}r: {hs}"));
+                            Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEHIT '{d.Person?.Display}' look {look:F0} sub {sm} at {(hp - e.c).magnitude / radius:F2}r: {hs}"));
                         }
+                    }
                     }
                 }
             if (cut > 0 && Env.Get("CSCCOOP_MUTANT") != "eyes-sharp")
@@ -319,7 +327,7 @@ public static class EyeOpener
         return parent;
     }
 
-    sealed class Lash { public List<int> Verts = new(); public float RootPhi, RootX, MinDist = float.MaxValue; }
+    sealed class Lash { public List<int> Verts = new(); public float RootPhi, RootX, MinDist = float.MaxValue, Dir; public int Side; }   // Side: +1 upper row, -1 lower
 
     // One eye. The eyelashes are loose pieces of the body mesh (cards, each twice), the upper row rooted on the upper
     // lid's edge, the lower on the lower's. Where the lids meet lies between the two rows' roots: fixed at -4 degrees
@@ -388,12 +396,50 @@ public static class EyeOpener
                 if (rows[i].RootPhi - rows[i - 1].RootPhi > gap) { gap = rows[i].RootPhi - rows[i - 1].RootPhi; cut = i; }
             }
             if (gap >= 2.5f) slit = (rows[cut].RootPhi + rows[cut - 1].RootPhi) * 0.5f;
+            else if (Env.Get("CSCCOOP_MUTANT") != "eyes-rows-by-root")
+            {
+                // The rows' roots meet where the lids do and can lie within a degree of each other (PO Man01's left eye:
+                // -14.8 and -13.4): no gap, the slit stayed at -4, and the upper lashes and part of the upper lid went
+                // down. Then the rows are told apart by where they point (the lower ones down, more than the upper), and
+                // the lids meet at their roots.
+                foreach (var l in rows) { var t = Direction(a, l, c); l.Dir = Mathf.Atan2(Vector3.Dot(t, up), Vector3.Dot(t, fwd)) * Mathf.Rad2Deg; }
+                var byDir = new List<Lash>(rows); byDir.Sort((p, q) => p.Dir.CompareTo(q.Dir));
+                float dgap = -1, sum = 0, lowCount = 0; int dcut = 1;
+                for (int i = 1; i < byDir.Count; i++)
+                {
+                    lowCount += byDir[i - 1].Verts.Count;
+                    if (lowCount < total * 0.3f || total - lowCount < total * 0.3f) continue;
+                    if (byDir[i].Dir - byDir[i - 1].Dir > dgap) { dgap = byDir[i].Dir - byDir[i - 1].Dir; dcut = i; }
+                }
+                if (dgap >= 10)
+                {
+                    float n = 0;
+                    foreach (var l in rows) { sum += l.RootPhi * l.Verts.Count; n += l.Verts.Count; }
+                    slit = sum / n;
+                    for (int i = 0; i < byDir.Count; i++) byDir[i].Side = i >= dcut ? 1 : -1;
+                }
+            }
         }
+        // One row only (Daughter new: lower lashes at -24, the upper not found): the fixed slit at -4 lay far above
+        // them, and the bottom of the shut upper lid went down with the lower one, a band across the eye. The lids meet
+        // just above a lower row (its lashes point down) or just below an upper one.
+        if (rows.Count > 0 && rows.TrueForAll(l => l.Side == 0) && Mathf.Approximately(slit, Slit) && Env.Get("CSCCOOP_MUTANT") != "eyes-one-row")
+        {
+            float lo = float.MaxValue, hi = float.MinValue, dir = 0, n = 0;
+            foreach (var l in rows)
+            {
+                var t = Direction(a, l, c);
+                dir += Mathf.Atan2(Vector3.Dot(t, up), Vector3.Dot(t, fwd)) * Mathf.Rad2Deg * l.Verts.Count; n += l.Verts.Count;
+                lo = Mathf.Min(lo, l.RootPhi); hi = Mathf.Max(hi, l.RootPhi);
+            }
+            slit = dir / n < -15 || hi < -15 ? hi + 5 : lo - 5;   // rooted low: lower, wherever it points (Daughter new's right eye)
+        }
+        foreach (var l in rows) if (l.Side == 0) l.Side = l.RootPhi >= slit ? 1 : -1;
         LastSlit = slit;
         if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
         {
             var sb = new System.Text.StringBuilder();
-            foreach (var l in rows) sb.Append(System.FormattableString.Invariant($"{l.RootPhi:F1}@{l.RootX / r:F2}r/{l.Verts.Count} "));
+            foreach (var l in rows) sb.Append(System.FormattableString.Invariant($"{l.RootPhi:F1}@{l.RootX / r:F2}r/{l.Verts.Count}{(l.Side > 0 ? "U" : "L")} "));
             Plugin.L.LogInfo(System.FormattableString.Invariant($"EYESLIT '{d.Person?.Display}' slit {slit:F1}, rows {sb}"));
         }
         // where the shut lids are straight in front of the eye bone, along the slit: the eyeball must stay behind it
@@ -407,7 +453,7 @@ public static class EyeOpener
         LastFront = front / r;
         if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEFRONT '{d.Person?.Display}' shut lids {front / r:F2}r in front of the eye bone (r {r:F4})"));
         var isLash = new HashSet<int>();
-        foreach (var l in rows) foreach (var v in l.Verts) isLash.Add(v);
+        foreach (var l in rows) { foreach (var v in l.Verts) isLash.Add(v); rowPieces.Add(piece[l.Verts[0]]); }
         int moved = 0;
         // the lashes: each card turned whole by what its root's lid edge does
         foreach (var l in rows)
@@ -417,7 +463,8 @@ public static class EyeOpener
             // standing over the eye like a comb, or its dark base hanging over the eye (Art BlackMale01 looked shut).
             if (Env.Get("CSCCOOP_MUTANT") != "eyes-lash-rigid" && Bend(d, a, l, c, right, up, fwd, r, slit)) { moved += l.Verts.Count; continue; }
             float w = 1 - Smooth(r * 0.75f, r * 1.3f, Mathf.Abs(l.RootX));
-            float delta = (Target(l.RootPhi, slit) - l.RootPhi) * w;
+            float lidPhi = l.Side > 0 ? Mathf.Max(l.RootPhi, slit + 0.5f) : Mathf.Min(l.RootPhi, slit - 0.5f);   // with its row's lid
+            float delta = (Target(lidPhi, slit) - lidPhi) * w;
             var rot = Quaternion.AngleAxis(-delta, right);
             foreach (var v in l.Verts) { Turn(a, v, c, rot); moved++; }
             // On a shut eye the upper lashes hang down over the lid; carried up with it they stood like a curtain in
@@ -429,7 +476,7 @@ public static class EyeOpener
             var root = RootPos(a, l, c);
             var tip = Direction(a, l, c);
             float now = Mathf.Atan2(Vector3.Dot(tip, up), Vector3.Dot(tip, fwd)) * Mathf.Rad2Deg;
-            float want = l.RootPhi >= slit ? UpperLash : LowerLash;
+            float want = l.Side > 0 ? UpperLash : LowerLash;
             float turn = Mathf.DeltaAngle(now, want) * w;
             if (Env.Get("CSCCOOP_MUTANT") == "eyes-lash-carried") turn = 0;
             var swing = Quaternion.AngleAxis(-turn, right);
@@ -437,7 +484,7 @@ public static class EyeOpener
             if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
             {
                 var t2 = Direction(a, l, c);
-                Plugin.L.LogInfo(System.FormattableString.Invariant($"EYELASH '{d.Person?.Display}' {l.Verts.Count}v root phi {l.RootPhi:F1} x {l.RootX / r:F2}r dist {l.MinDist / r:F2}r {(l.RootPhi >= slit ? "upper" : "lower")} w {w:F2} delta {delta:F1} dir {now:F1} -> {Mathf.Atan2(Vector3.Dot(t2, up), Vector3.Dot(t2, fwd)) * Mathf.Rad2Deg:F1} len {tip.magnitude / r:F2}r"));
+                Plugin.L.LogInfo(System.FormattableString.Invariant($"EYELASH '{d.Person?.Display}' {l.Verts.Count}v root phi {l.RootPhi:F1} x {l.RootX / r:F2}r dist {l.MinDist / r:F2}r {(l.Side > 0 ? "upper" : "lower")} w {w:F2} delta {delta:F1} dir {now:F1} -> {Mathf.Atan2(Vector3.Dot(t2, up), Vector3.Dot(t2, fwd)) * Mathf.Rad2Deg:F1} len {tip.magnitude / r:F2}r"));
             }
         }
         // the lids
@@ -493,7 +540,7 @@ public static class EyeOpener
         }
         // per slice: where its root goes, and the two turns (with the lid, then about the root)
         var ok = new bool[N]; var xs = new float[N]; var carry = new float[N]; var swing = new float[N]; var root = new Vector3[N];
-        bool upper = l.RootPhi >= slit;
+        bool upper = l.Side > 0;
         float want = upper ? UpperLash : LowerLash;
         for (int i = 0; i < N; i++)
         {
@@ -534,7 +581,8 @@ public static class EyeOpener
 
     const float Top = 75, Bottom = -65;
     public static float LastSlit, LastTilt, LastFront;
-    static bool[] lashVert;   // vertices drawn with an eyelash material (null: the mesh has none)
+    static bool[] lashVert;
+    static readonly HashSet<int> rowPieces = new();   // pieces that are lash rows (of either eye)   // vertices drawn with an eyelash material (null: the mesh has none)
 
     // Where a lid point at phi goes: [slit, Top] -> [slit + upper opening, Top], [Bottom, slit] -> [Bottom, slit + lower].
     static float Target(float phi, float slit)

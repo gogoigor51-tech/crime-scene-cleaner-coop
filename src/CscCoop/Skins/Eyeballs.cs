@@ -191,18 +191,21 @@ public static class Eyeballs
             {
                 float dx = (x + 0.5f) / S * 2 - 1, dy = (y + 0.5f) / S * 2 - 1, d = Mathf.Sqrt(dx * dx + dy * dy);
                 Color c;
-                if (d < 0.16f) c = new Color(0.02f, 0.02f, 0.02f);
-                else if (d < 0.40f)
+                // A human iris is about half as wide as the eyeball (11.7 of 24 mm): at 0.40 it showed whole with white
+                // all round it, and the opened eyes stared (owner's test of 0.4.4-test4, PO Man01, SC Mother).
+                float irisR = Env.Get("CSCCOOP_MUTANT") == "eyes-small-iris" ? 0.40f : 0.48f, pupil = irisR * 0.4f;
+                if (d < pupil) c = new Color(0.02f, 0.02f, 0.02f);
+                else if (d < irisR)
                 {
                     float a = (Mathf.Atan2(dy, dx) / (2 * Mathf.PI) + 0.5f) * rays.Length;
                     float ray = rays[(int)a % rays.Length];
-                    float f = (d - 0.16f) / 0.24f;
+                    float f = (d - pupil) / (irisR - pupil);
                     c = Color.Lerp(inner, outer, f) * (0.75f + 0.35f * ray);
                     if (f > 0.85f) c *= 0.55f;   // the dark rim
                 }
                 else
                 {
-                    float e = Mathf.Clamp01((d - 0.4f) / 0.6f);
+                    float e = Mathf.Clamp01((d - irisR) / (1 - irisR));
                     c = Color.Lerp(new Color(0.93f, 0.91f, 0.88f), new Color(0.86f, 0.74f, 0.72f), e * e);
                 }
                 c.a = 1;
