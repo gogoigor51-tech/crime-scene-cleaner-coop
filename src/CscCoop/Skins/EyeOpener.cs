@@ -136,7 +136,37 @@ public static class EyeOpener
                     }
                 }
             if (cut > 0 && Env.Get("CSCCOOP_MUTANT") != "eyes-sharp")
-                foreach (var e in new[] { eyeL, eyeR }) SmoothEdge(a, side, e.c, e.slit, right, up, fwd, radius);
+            {
+                // Both eyes open as far: each lid's edge goes where the two eyes' lids are on average. Measured each by
+                // itself, the meshes differ a little round each eye (AmberGirl02: one eye opened wider, owner's test).
+                float hiOff = float.NaN, loOff = float.NaN;
+                if (Env.Get("CSCCOOP_MUTANT") != "eyes-uneven"
+                    && SmoothEdge(a, side, eyeL.c, eyeL.slit, right, up, fwd, radius, true) && LastHi > 0 && LastLo < 0)
+                {
+                    float h1 = LastHi, l1 = LastLo;
+                    if (SmoothEdge(a, side, eyeR.c, eyeR.slit, right, up, fwd, radius, true) && LastHi > 0 && LastLo < 0)
+                    {
+                        // the less open of the two (one eye's lid can be measured wrong: Daughter new 87 against 39)
+                        hiOff = Mathf.Min(h1, LastHi); loOff = Mathf.Max(l1, LastLo);
+                        if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEEVEN '{d.Person?.Display}' upper {h1:F1}/{LastHi:F1} lower {l1:F1}/{LastLo:F1} -> {hiOff:F1}/{loOff:F1}"));
+                    }
+                }
+                foreach (var e in new[] { eyeL, eyeR }) SmoothEdge(a, side, e.c, e.slit, right, up, fwd, radius, false, hiOff, loOff);
+            }
+            if (Env.Get("CSCCOOP_EYES_DUMP") == "1")
+                foreach (var e in new[] { eyeL, eyeR })
+                {
+                    float top = -9, bot = 9; Vector3 hiP = Vector3.zero, loP = Vector3.zero;
+                    for (int v = 0; v < a.Vertices; v++)
+                    {
+                        if (!edge[v]) continue;
+                        Local(a, v, e.c, right, up, fwd, out var x, out var phi, out var dist, out _);
+                        if (dist > radius * 2.5f || Mathf.Abs(x) > radius * 0.25f) continue;
+                        float hh = Vector3.Dot(EyeOpener.P(a, v) - e.c, up) / radius;
+                        if (side[v] > 0 && hh > top) top = hh; if (side[v] < 0 && hh < bot) bot = hh;
+                    }
+                    Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEOPEN '{d.Person?.Display}' bone up {Vector3.Dot(e.c - (L + R) * 0.5f, up) / radius:F2}r fwd {Vector3.Dot(e.c - (L + R) * 0.5f, fwd) / radius:F2}r; edge top {top:F2}r bottom {bot:F2}r (heights from the bone)"));
+                }
             // The eyeballs: placed here, where the skin is (the head bone's own space, from its bind pose), not from
             // the copy's bones at run time: on some people (Art BlackFemale01) those put the eyeballs out of the face.
             // As big as fits behind where the shut lids were, at most a fifth of the eye distance.
@@ -150,10 +180,33 @@ public static class EyeOpener
                     if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEFIT '{d.Person?.Display}' front {e.front / radius:F2}r skin inside {inside / radius:F2}r -> eyeball {big / radius:F2}r"));
                     if (Env.Get("CSCCOOP_MUTANT") == "eyes-bone-placed") break;
                     var bind = BindPose(a, h);
+                    // The eye bone sits outward of the middle of the opening (the corners aren't round the bone), so
+                    // looking straight ahead the irises sat toward the outer corners, one more than the other in a
+                    // picture: the eyes looked uneven, wall-eyed (owner's test, AmberGirl02). Each eye looks through the
+                    // middle of its opening (sideways only; up and down stays straight).
+                    var look = fwd;
+                    if (Env.Get("CSCCOOP_MUTANT") != "eyes-straight")
+                    {
+                        float sx = 0, sn = 0;
+                        for (int v = 0; v < a.Vertices; v++)
+                        {
+                            if (!edge[v]) continue;
+                            var q = EyeOpener.P(a, v) - e.c;
+                            if (q.magnitude > radius * 2.5f || Vector3.Dot(q, fwd) <= 0) continue;
+                            sx += Vector3.Dot(q, right); sn++;
+                        }
+                        if (sn > 0)
+                        {
+                            float mid = sx / sn;   // the opening's middle, sideways from the bone
+                            float ang = Mathf.Clamp(Mathf.Atan2(mid, e.front > 0 && e.front < radius * 5 ? e.front : radius * 1.3f) * Mathf.Rad2Deg, -15, 15);
+                            look = Quaternion.AngleAxis(ang, up) * fwd;
+                            if (Env.Get("CSCCOOP_EYES_DUMP") == "1") Plugin.L.LogInfo(System.FormattableString.Invariant($"EYEAIM '{d.Person?.Display}' opening middle {mid / radius:F2}r sideways -> turned {ang:F1} deg"));
+                        }
+                    }
                     d.Eyes.Add(new EyeFit
                     {
                         Head = r.Bones[h], Pos = bind.MultiplyPoint3x4(e.c),
-                        Rot = Quaternion.LookRotation(bind.MultiplyVector(fwd), bind.MultiplyVector(up)),
+                        Rot = Quaternion.LookRotation(bind.MultiplyVector(look), bind.MultiplyVector(up)),
                         Radius = bind.MultiplyVector(right * big).magnitude, Socket = bind.MultiplyVector(right * radius).magnitude,
                     });
                 }
@@ -187,7 +240,7 @@ public static class EyeOpener
     // open in the middle as the lids were opened there. Then the lid round it is smoothed (its angle round the eye
     // averaged with its neighbours', a few times), so no fold or spike is left behind the edge. Vertices at the same
     // place (texture seams) move together.
-    static void SmoothEdge(MeshArrays a, sbyte[] side, Vector3 c, float slit, Vector3 right, Vector3 up, Vector3 fwd, float r)
+    static bool SmoothEdge(MeshArrays a, sbyte[] side, Vector3 c, float slit, Vector3 right, Vector3 up, Vector3 fwd, float r, bool measureOnly = false, float hiOff = float.NaN, float loOff = float.NaN)
     {
         var mine = new List<int>();
         float xc = 0;
@@ -199,7 +252,7 @@ public static class EyeOpener
             mine.Add(v);
             if (edge[v]) xc = Mathf.Max(xc, Mathf.Abs(x));
         }
-        if (mine.Count == 0 || xc < r * 0.3f) return;
+        if (mine.Count == 0 || xc < r * 0.3f) return false;
         // how far open each lid is in the middle: the median of its edge there
         var hiMid = new List<float>(); var loMid = new List<float>();
         foreach (var v in mine)
@@ -208,9 +261,13 @@ public static class EyeOpener
             Local(a, v, c, right, up, fwd, out var x, out var phi, out _, out _);
             if (Mathf.Abs(x) < xc * 0.35f) (side[v] > 0 ? hiMid : loMid).Add(phi);
         }
-        if (hiMid.Count == 0 || loMid.Count == 0) return;
+        if (hiMid.Count == 0 || loMid.Count == 0) return false;
         hiMid.Sort(); loMid.Sort();
         float hi = hiMid[hiMid.Count / 2], lo = loMid[loMid.Count / 2];
+        LastHi = hi - slit; LastLo = lo - slit;
+        if (measureOnly) return true;
+        if (!float.IsNaN(hiOff)) hi = slit + hiOff;
+        if (!float.IsNaN(loOff)) lo = slit + loOff;
         float Curve(float x, int s)
         {
             float f = Mathf.Pow(Mathf.Clamp01(1 - x * x / (xc * xc)), 0.55f);
@@ -272,8 +329,10 @@ public static class EyeOpener
                 if (Mathf.Abs(delta) > 0.01f) Turn(a, v, c, Quaternion.AngleAxis(-delta, right));
             }
         LastSmoothed += mine.Count;
+        return true;
     }
     public static int LastSmoothed;
+    static float LastHi, LastLo;
 
     // Tests: the connected pieces of mesh around the left eye, with where they sit (phi: degrees up from straight ahead).
     static void Dump(PersonData d, MeshArrays a, Vector3 c, Vector3 right, Vector3 up, Vector3 fwd, float r)

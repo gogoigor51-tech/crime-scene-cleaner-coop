@@ -548,6 +548,11 @@ victims' bodies" only on the host, a restart only on the host.
     (pointing down, or rooted below -15) or below an upper one. Small pieces of the eyelash material that aren't lash
     rows (the wet line along the lid) are left out near the eyes.
   - 23 faces again: all even, no bands; small dark notches stay at some inner corners. skins 5/5.
+- Owner's third look (AmberGirl02 uneven): the lids were even (edges 0.48/-0.56 radii from each bone on both), but the
+  eye bones sit outward of the openings' middles, so looking straight ahead the irises sat toward the outer corners,
+  one more than the other in a picture (wall-eyed). Each eyeball now turns sideways to look through the middle of
+  its opening (4-10 degrees). Also both eyes' lid edges now go to the less open of the two (EYEEVEN; Daughter new
+  measured 87 against 39 degrees on one lid). 23 faces, skins 5/5.
 
 ### Other players' tool levels and skins (2026-11-09)
 - Owner's request: a friend's tools should look like theirs (level and the game's tool skin), on the held tool, their
