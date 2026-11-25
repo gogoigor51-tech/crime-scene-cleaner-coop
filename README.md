@@ -4,8 +4,28 @@ A co-op mod for [Crime Scene Cleaner](https://store.steampowered.com/app/1040200
 story jobs together with a Steam friend. BepInEx 6 (IL2CPP) plugin, peer-to-peer over Steam, no dedicated server.
 
 **Status: playable for two players.** Two players finished chapters 1–6 of the story together (0.4.1) and played
-Developers' Hell on 0.4.3's test builds. 3–4 players, Nightmare mode and the later chapters are untested.
+Developers' Hell on 0.4.3's test builds; 0.4.4's skins were tested by two players. 3–4 players, Nightmare
+mode and the later chapters are untested.
 [Download the latest release](../../releases/latest). Русская версия — ниже.
+
+## What's new in 0.4.4
+
+**New, experimental: skins.** In the pause menu (Esc) → **Скины / Skins** each player can choose to be shown to the
+others as one of the game's people (about 140, from every job) instead of the mod's cleaner figure. The people are
+taken from the bodies and characters in the game's own files, so some of them are bloodied or bruised and their
+eyes were closed; the mod opens the eyes and draws its own eyeballs, and the eye colour can be chosen on a colour
+ring under the preview. A big preview on the right turns with the mouse (wheel: closer to the face). The choice is
+saved and the friend sees it. Experimental: the skin moves as simply as the mod's figure, a held tool can float a
+little away from the hand, some faces still have small flaws round the eyes, and the list has duplicates (the same
+person, clean and bloodied).
+
+Fixes:
+
+1. Another player's tools are shown at their level and in their own tool skin from the game: the tool in their hands
+   (the Akimbo sponge with a sponge or glove in each hand; the water pistols always, not only while cleaning), and
+   their buckets, lamps, power washer, ozonator and trash bags. Before, they wore your skins or none, and placed
+   tools could show both skins at once (a lamp: yours when off, theirs when on).
+2. Another player's power washer lance is shown at its level (it used to look like your own lance).
 
 ## What's new in 0.4.3
 
@@ -65,6 +85,8 @@ Fixed after two players' tests on Developers' Hell; all checked by two players.
 | Emails deleted on a computer in a job; the "delete the emails" objective | works (0.4.3) |
 | Arcade machines (Super Stacker) are each player's own; the reward (the secret passage at 50 000 points) is shared | works (0.4.3) |
 | The end-of-job report and the van's body-disposal animation play once | works (0.4.3) |
+| Each player's tool level and tool skins (held tools, buckets, lamps, washers, trash bags) | works (0.4.4) |
+| Skins: each player's chosen person and eye colour | experimental (0.4.4) |
 | Jobs where the two saves differ a little (Villa): only the differing table stops being shared | works (0.4.2) |
 | CCTV laptop (Smart House and later): the hack and deleted recordings are shared, the objective counts for both | hack: works; recordings: bot suite only, not tested by players |
 | Job restart from the pause menu restarts it for both | 0.4.2, not tested by players |
@@ -84,6 +106,11 @@ Fixed after two players' tests on Developers' Hell; all checked by two players.
 - **Petting Kowalski's dog**: on the client the petting plays very fast.
 - **No more than 3 UV lamps can be lit at once**: a limit of the game; with a fourth on, one of the other player's
   UV lamps stays dark on your screen.
+- **Skins after re-entering**: after re-entering, the client may not see the host's skin; the host has to choose
+  their skin again.
+- **Amber Alert**: the secret passage opened by winning the dart game isn't shared; when one player opens the dart
+  game, it opens for every player; once the blood in the office went out of sync; once both players were told that one
+  piece of furniture was missing in the bar, though after re-entering the game the bar was complete.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
 
 ## Bug reports (F9)
@@ -104,7 +131,7 @@ player's machine under one id, then asks "what's wrong?". Reports land in `BepIn
 - `tools/run-pair.ps1 -Test <suite> [-Mission 11] [-Mutant <name>]` runs two copies on one PC with bots over
   localhost and checks the result (`tools/<suite>_report.py`). Suites: items, stains, bodies, doors, trash, world2,
   jobs, laptop, cctv, figure, breakhit, bump, toolcarry, footsteps, doorsync, doorclick, products, lamps, elevator,
-  fixlift, bagmerge, arcade, flashlight, report, placed, washer, stackreward, mails, vanrace. `-Mission 11` plays it
+  fixlift, bagmerge, arcade, flashlight, report, placed, washer, stackreward, mails, vanrace, skins, toolskins. `-Mission 11` plays it
   on Developers' Hell; `-Mutant` brings back an old bug, and that run must fail. `tools/run-census.ps1` lists every
   component type in every job.
 
@@ -117,7 +144,16 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 Кооп-мод для Crime Scene Cleaner (Steam, сборка 26046462): сюжетные заказы вдвоём со Steam-другом.
 
 **Статус: играбельно вдвоём.** Пройдены главы 1–6 вдвоём (0.4.1), Developers' Hell сыгран вдвоём на тестовых
-сборках 0.4.3. 3–4 игрока, Nightmare и поздние главы не проверены.
+сборках 0.4.3, скины 0.4.4 проверены вдвоём. 3–4 игрока, Nightmare и поздние главы не проверены.
+
+**Что нового в 0.4.4:** **скины (экспериментально)** — в меню паузы (Esc) пункт «Скины»: можно выбрать, кем вас
+видят другие игроки, — одним из людей игры (около 140, из всех заказов) вместо фигуры уборщика мода. Люди взяты из
+тел и персонажей в файлах самой игры, поэтому некоторые в крови или синяках, а глаза у них были закрыты: мод
+открывает глаза и рисует свои глазные яблоки, цвет глаз выбирается на цветовом кольце. Выбор сохраняется и виден
+другу. Пока что движения у скина простые, инструмент может висеть чуть в стороне от ладони, у некоторых лиц
+остаются мелкие недочёты у глаз, в списке есть повторы. Исправлено: инструменты друга показываются его уровня и в
+его скинах из игры — в руках (у «Двойной губки» по губке или перчатке в каждой руке, водяные пистолеты видны всегда)
+и поставленные вёдра, лампы, мойка, озонатор, мешки; раньше они были в ваших скинах или с двумя скинами сразу.
 
 **Что нового в 0.4.3:** предметы рядом с игроками падают и отскакивают у обоих; чужое ведро и лампу можно носить и
 ими пользоваться, моющие средства (модификаторы) в вёдрах и мойках общие; своя лампа больше не включает чужую,
@@ -144,4 +180,7 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 проверены; после пропуска заставки коробка пиццы может висеть рядом с персонажем в квартире; квартира Ковальского
 (хаб) не синхронизируется; если в сохранении клиента в заказе уже есть прогресс, а у хоста нет, прогресс расходится;
 у клиента поглаживание собаки Ковальского проигрывается очень быстро; одновременно могут светить не больше 3
-УФ-ламп (ограничение игры).
+УФ-ламп (ограничение игры); после перезахода клиент может не видеть скин хоста — хосту нужно выбрать скин
+заново; в заказе Amber Alert тайный проход после победы в дартс не синхронизируется, игра в дартс открывается у
+всех игроков сразу, однажды разошлась кровь в офисе, а обоим игрокам говорилось, что в баре не хватает одного
+предмета мебели, хотя после перезахода бар был готов.
