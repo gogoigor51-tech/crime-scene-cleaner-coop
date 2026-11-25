@@ -111,6 +111,7 @@ Fixed after two players' tests on Developers' Hell; all checked by two players.
 - **Amber Alert**: the secret passage opened by winning the dart game isn't shared; when one player opens the dart
   game, it opens for every player; once the blood in the office went out of sync; once both players were told that one
   piece of furniture was missing in the bar, though after re-entering the game the bar was complete.
+- **Crouching isn't shown**: other players always look standing, even when they crouch.
 - Not tested: 3–4 players, Nightmare mode, chapters after the sixth, the final mission.
 
 ## Bug reports (F9)
@@ -183,4 +184,4 @@ Made with Claude Code (Anthropic) together with the players who tested it. Not a
 УФ-ламп (ограничение игры); после перезахода клиент может не видеть скин хоста — хосту нужно выбрать скин
 заново; в заказе Amber Alert тайный проход после победы в дартс не синхронизируется, игра в дартс открывается у
 всех игроков сразу, однажды разошлась кровь в офисе, а обоим игрокам говорилось, что в баре не хватает одного
-предмета мебели, хотя после перезахода бар был готов.
+предмета мебели, хотя после перезахода бар был готов; приседание друга не видно — он всегда выглядит стоящим.
